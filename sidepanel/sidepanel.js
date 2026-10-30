@@ -317,7 +317,7 @@ function desenharPrecos() {
       <button class="primario largo" data-acao="precos-buscar" ${p.buscando ? "disabled" : ""}>${p.buscando ? "Consultando 7 datas…" : "Buscar"}</button></div>
     ${p.erro ? `<p class="aviso-caixa">${esc(p.erro)}</p>` : ""}${escolhas}
     ${r ? `<h4 class="rotulo-sugestoes">${esc(r.hotel || `Hotel #${r.id_hotel}`)}</h4><ul class="cotacoes">${linhas}</ul>${resumoTexto}${quartos}
-      <p class="nota">Demonstração: valores do plano de quem está logado no Reservas, não do cliente. "Indisponível" pode ser falta de quarto ou o fornecedor fora do ar. O prazo do cancelamento grátis está no detalhe do hotel, no site.</p>` : ""}
+      <p class="nota">Demonstração: valores do plano de quem está logado no Reservas, não do cliente. "Não confirmado" pode ser falta de quarto ou o fornecedor fora do ar. O prazo do cancelamento grátis está no detalhe do hotel, no site.</p>` : ""}
   </div>`;
 }
 

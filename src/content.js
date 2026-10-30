@@ -76,17 +76,26 @@
       conferindo.delete(callId);
     }
     const alertas = resposta?.alertas || [];
-    if (!resposta || resposta.livre) return enviar(callId); // não conferiu: libera sem contar como correção
+    if (!resposta || resposta.livre) { // não conferiu: libera sem contar como correção
+      bloqueados.delete(callId);
+      return enviar(callId);
+    }
+    // cada alerta conta uma vez (outro Enter com o mesmo erro não infla a conta) e cada um que sumiu é uma correção,
+    // mesmo que outro continue na mensagem (indicador "erros evitados")
+    const anteriores = bloqueados.get(callId) || [];
+    const chave = (a) => { const { alerta, subtipo } = alertaParaEvento(a); return `${alerta}|${subtipo}`; };
+    const atuais = new Set(alertas.map(chave));
+    const vistos = new Set(anteriores.map(chave));
+    for (const a of anteriores.filter((x) => !atuais.has(chave(x)))) {
+      const { alerta, subtipo } = alertaParaEvento(a);
+      registrar("corrigiu_alerta", callId, { alerta, subtipo });
+    }
+    for (const a of alertas.filter((x) => !vistos.has(chave(x)))) registrar("alerta", callId, { ...alertaParaEvento(a), momento: "antes_de_enviar" });
     if (!alertas.length) {
-      for (const a of bloqueados.get(callId) || []) {
-        const { alerta, subtipo } = alertaParaEvento(a);
-        registrar("corrigiu_alerta", callId, { alerta, subtipo });
-      }
       bloqueados.delete(callId);
       return enviar(callId);
     }
     bloqueados.set(callId, alertas);
-    for (const a of alertas) registrar("alerta", callId, { ...alertaParaEvento(a), momento: "antes_de_enviar" });
     mostrarTrava(callId, alertas);
   }
 
