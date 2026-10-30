@@ -1,0 +1,109 @@
+:root {
+  --marca: #0b6e4f; --marca-escura: #085a40; --marca-clara: #e3f3ec;
+  --texto: #1f2933; --suave: #52606d; --borda: #d9e0e6; --fundo: #f6f8fa;
+  --aviso: #8a5300; --aviso-claro: #fff4e0; --erro: #b42318; --erro-claro: #fdecea;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.4 system-ui, "Segoe UI", sans-serif; color: var(--texto); background: var(--fundo); min-width: 300px; }
+[hidden] { display: none !important; }
+h1 { font-size: 18px; margin: 8px 0; }
+p { color: var(--suave); margin: 6px 0; }
+button { font: inherit; cursor: pointer; border-radius: 8px; }
+button:disabled { cursor: default; opacity: .6; }
+button:focus-visible, input:focus-visible, .chat:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+
+.topo { display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 10px 0 14px; background: #fff; border-bottom: 1px solid var(--borda); position: sticky; top: 0; z-index: 2; }
+.usuario { flex: 1; color: var(--suave); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link { background: none; border: 0; color: var(--marca); min-height: 32px; padding: 6px 8px; }
+main { padding: 12px 14px 16px; }
+.primario { background: var(--marca); color: #fff; border: 0; padding: 10px 16px; font-weight: 600; }
+.primario:hover:not(:disabled) { background: var(--marca-escura); }
+/* desativado com instrução ("Abra este chat no Interact"): legível, não apagado */
+.primario:disabled { opacity: 1; background: #e3f3ec; color: #085a40; }
+.secundario { background: #fff; color: var(--texto); border: 1px solid var(--borda); padding: 8px 14px; }
+.largo { width: 100%; margin-top: 12px; }
+label { display: block; font-weight: 600; margin: 10px 0 4px; }
+input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; }
+.erro { color: var(--erro); min-height: 1em; }
+
+#tela-desligado { text-align: center; padding-top: 24px; }
+.play { width: 88px; height: 88px; border-radius: 50%; border: 0; background: var(--marca); color: #fff; font-size: 34px; padding-left: 8px; box-shadow: 0 4px 14px rgba(11,110,79,.3); }
+.play:hover { background: var(--marca-escura); }
+
+.situacao { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 10px; position: sticky; top: 52px; z-index: 1; }
+.situacao span { flex: 1; min-width: 0; }
+.situacao button { min-height: 32px; padding: 6px 12px; }
+.situacao::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: currentColor; }
+.situacao.ok { background: var(--marca-clara); color: var(--marca-escura); }
+.situacao.aviso { background: var(--aviso-claro); color: var(--aviso); }
+.situacao.erro { background: var(--erro-claro); color: var(--erro); font-weight: 600; }
+.rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); margin: 4px 0 6px; }
+
+.chats { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.chat { width: 100%; text-align: left; background: #fff; border: 1px solid var(--borda); padding: 8px 10px; display: grid; gap: 2px; }
+.chat .linha { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.chat .nome { font-weight: 600; flex: 1 1 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat .hora { font-size: 12px; color: var(--suave); }
+.chat .ultima { font-size: 12px; color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vazio { background: #fff; border: 1px dashed var(--borda); border-radius: 8px; padding: 14px; color: var(--suave); }
+
+.selo { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+.selo.tela { background: #e8eefc; color: #2747a8; }
+.selo.bravo, .selo.critico { background: var(--erro-claro); color: var(--erro); }
+.selo.comparacao { background: var(--aviso-claro); color: var(--aviso); }
+
+.detalhe { background: #fff; border: 1px solid var(--marca); border-radius: 10px; padding: 12px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.detalhe-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 6px; }
+.detalhe-topo h3 { margin: 0; font-size: 15px; flex: 1 1 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voltar { font-size: 18px; padding: 0 6px; min-height: 28px; }
+.minimizar { font-size: 18px; }
+.conversa { display: grid; gap: 4px; margin: 6px 0 10px; max-height: 240px; overflow-y: auto; }
+.msg { border-radius: 8px; padding: 5px 8px; font-size: 13px; max-width: 92%; }
+.msg .quem { display: block; font-size: 11px; color: var(--suave); }
+.msg .txt { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.msg.cliente { background: var(--fundo); justify-self: start; }
+.msg.atendente { background: var(--marca-clara); justify-self: end; }
+.msg.alvo { outline: 2px solid var(--marca); }
+.rotulo-sugestoes { font-size: 13px; margin: 4px 0; color: var(--marca-escura); }
+.ajuda { font-size: 15px; }
+.centro { text-align: center; }
+.selo.aguardando { background: var(--aviso-claro); color: var(--aviso); }
+.risco { margin: 0 0 6px; font-size: 13px; color: var(--erro); font-weight: 600; }
+.alerta-atendente { background: var(--aviso-claro); color: var(--aviso); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+
+.gerando { display: flex; align-items: center; gap: 8px; color: var(--suave); padding: 10px 0; }
+.gerando::before { content: ""; width: 14px; height: 14px; border: 2px solid var(--borda); border-top-color: var(--marca); border-radius: 50%; animation: gira 1s linear infinite; }
+@keyframes gira { to { transform: rotate(360deg); } }
+.sugestao { border: 1px solid var(--borda); border-radius: 8px; padding: 10px; margin-top: 6px; }
+.sugestao .texto { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 8px; }
+.sugestao .acoes { display: flex; gap: 6px; }
+.sugestao .acoes .primario { flex: 1; padding: 8px 10px; }
+.sugestao .feito { font-size: 12px; color: var(--marca-escura); margin-top: 6px; }
+.nota { font-size: 12px; color: var(--suave); margin-top: 6px; }
+.aviso-caixa { background: var(--aviso-claro); color: var(--aviso); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+
+
+.avaliar { border-top: 1px solid var(--borda); margin-top: 10px; padding-top: 8px; }
+.avaliar-topo { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--suave); }
+.avaliar-topo span { flex: 1; }
+.nota-btn { background: #fff; border: 1px solid var(--borda); min-width: 40px; min-height: 36px; font-size: 16px; }
+.nota-btn.marcada { border-color: var(--marca); background: var(--marca-clara); }
+.avaliar textarea { width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; resize: vertical; }
+.avaliar textarea:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+.avaliar .largo { margin-top: 6px; }
+
+/* datas mais baratas */
+.precos-abrir { display: block; margin: 12px auto 0; }
+.precos { border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; margin-top: 12px; background: #fff; }
+.form-precos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.campo-preco { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--suave); }
+.campo-preco:first-child, .form-precos .largo { grid-column: 1 / -1; }
+.campo-preco input { font: inherit; font-size: 14px; color: var(--texto); padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; min-width: 0; }
+.escolhas, .cotacoes { list-style: none; margin: 6px 0 0; padding: 0; }
+.escolhas li { margin-bottom: 4px; } .escolhas button { width: 100%; text-align: left; }
+.cotacoes li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 4px; border-bottom: 1px solid var(--borda); }
+.cotacoes li.barata { background: #e3f3ec; border-radius: 6px; }
+.cotacoes .data { min-width: 84px; font-weight: 600; } .cotacoes .valor { flex: 1 1 120px; text-align: right; }
+.selo.barata { background: var(--marca); color: #fff; }
+.cotacoes .quarto { flex: 1 1 100%; font-size: 12px; color: var(--suave); }
+.filtro-preco { display: flex; align-items: center; gap: 6px; font-size: 13px; grid-column: span 1; }

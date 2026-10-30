@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Copiloto: configuração</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; max-width: 520px; margin: 32px auto; padding: 0 16px; color: #1f2933; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #c4ccd4; border-radius: 6px; font: inherit; }
+    button { margin-top: 12px; padding: 8px 16px; border: 0; border-radius: 6px; background: #0b6e4f; color: #fff; font: inherit; cursor: pointer; }
+    p { color: #52606d; }
+    #estado { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Copiloto de Atendimento</h1>
+  <p>Endereço do painel (assistente-view) que a TI informou. Ex.: <code>https://painel.rdcviagens.com.br</code></p>
+  <label for="url">Endereço do painel</label>
+  <input id="url" type="url" placeholder="https://..." autocomplete="off">
+  <button id="salvar">Salvar</button>
+  <p id="estado" role="status"></p>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

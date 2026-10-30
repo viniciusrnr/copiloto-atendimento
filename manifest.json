@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Copiloto de Atendimento RDC",
+  "version": "0.5.0",
+  "description": "Sugestões de resposta da IA para os seus chats do Interact. Você revisa e envia.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "sidePanel"],
+  "host_permissions": ["https://rdc.digitro.cloud/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*"],
+  "background": { "service_worker": "src/background.js", "type": "module" },
+  "side_panel": { "default_path": "sidepanel/sidepanel.html" },
+  "options_page": "options/options.html",
+  "action": {
+    "default_title": "Copiloto de Atendimento",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "content_scripts": [
+    { "matches": ["https://rdc.digitro.cloud/*"], "js": ["src/content.js"], "run_at": "document_idle" }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["src/regras.js"], "matches": ["https://rdc.digitro.cloud/*"] }
+  ]
+}

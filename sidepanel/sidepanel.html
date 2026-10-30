@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Copiloto de Atendimento</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="topo">
+    <strong>Copiloto</strong>
+    <span id="usuario" class="usuario"></span>
+    <button id="desligar" class="link" hidden>■ Desligar</button>
+    <button id="sair" class="link" hidden>Sair</button>
+    <button id="minimizar" class="link minimizar" title="Minimizar (clique no ícone da extensão para voltar)" aria-label="Minimizar">⇥</button>
+  </header>
+
+  <main>
+    <section id="tela-config" hidden>
+      <h1>Falta configurar</h1>
+      <p>Informe o endereço do painel da RDC para a extensão funcionar.</p>
+      <button id="abrir-opcoes" class="primario">Configurar</button>
+    </section>
+
+    <section id="tela-login" hidden>
+      <h1>Entrar</h1>
+      <p>Use o mesmo e-mail e senha do painel.</p>
+      <form id="form-login">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" autocomplete="username" required>
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" autocomplete="current-password" required>
+        <button class="primario largo" type="submit">Entrar</button>
+      </form>
+      <p id="erro-login" class="erro" role="alert"></p>
+    </section>
+
+    <section id="tela-desligado" hidden>
+      <button id="ligar" class="play" aria-label="Ligar o copiloto"><span aria-hidden="true">▶</span></button>
+      <h1>Ligar o copiloto</h1>
+      <p>Ao ligar, o copiloto acompanha os seus chats do Interact e sugere respostas quando você pedir.
+        Nada é enviado sem você.</p>
+      <p id="erro-ligar" class="erro" role="alert"></p>
+    </section>
+
+    <section id="tela-ligado" hidden>
+      <div id="situacao" class="situacao" role="status"></div>
+      <div id="conteudo"></div>
+    </section>
+  </main>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
