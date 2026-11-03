@@ -107,3 +107,10 @@ input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border
 .selo.barata { background: var(--marca); color: #fff; }
 .cotacoes .quarto { flex: 1 1 100%; font-size: 12px; color: var(--suave); }
 .filtro-preco { display: flex; align-items: center; gap: 6px; font-size: 13px; grid-column: span 1; }
+
+/* modo supervisão (local, só leitura): esconde as ações que exigem a sessão do atendente */
+.sup [data-acao="gerar"], .sup [data-acao="inserir"], .sup [data-acao="nota"], .sup [data-acao="avaliar"],
+.sup .precos-abrir, .sup [data-acao="precos-abrir"], .sup [data-acao="precos-fechar"],
+.sup [data-acao="precos-buscar"], .sup [data-acao="precos-hotel"] { display: none !important; }
+.sup-botoes { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+#supSelect { width: 100%; min-height: 36px; padding: 6px 8px; }

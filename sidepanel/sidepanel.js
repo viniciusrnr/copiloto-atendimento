@@ -23,6 +23,7 @@ const s = {
   vistas: new Map(), // sugestao_id -> {callId, seq, sugestoes, exibidaEm, usada, fim}
   avaliacoes: {}, // sugestao_id -> {nota, comentario, enviada}
   verLista: false, // "← Chats": mostra só a lista até escolher outro chat
+  supervisao: false, // modo supervisão local: sem login, acompanha quem está atendendo (só leitura)
   // "Cliente achou caro?": o hotel em datas vizinhas no valor do cliente (motor do Reservas), um estado por chat
   precos: {},  // call_id -> { aberto, form, escolhas, buscando, erro, resultado }
 };
@@ -35,8 +36,8 @@ function precosDoChat(callId) {
 
 // ---------- telas ----------
 function mostrar(tela) {
-  for (const id of ["tela-config", "tela-login", "tela-desligado", "tela-ligado"]) $(id).hidden = id !== tela;
-  $("desligar").hidden = tela !== "tela-ligado";
+  for (const id of ["tela-config", "tela-login", "tela-supervisao", "tela-desligado", "tela-ligado"]) $(id).hidden = id !== tela;
+  $("desligar").hidden = !(tela === "tela-ligado" && !s.supervisao);  // supervisão é só leitura: sem desligar
 }
 
 async function iniciar() {
@@ -45,6 +46,7 @@ async function iniciar() {
   $("usuario").textContent = sessao ? sessao.usuario?.nome || sessao.usuario?.email || "" : "";
   $("sair").hidden = !sessao;
   if (!urlView) return mostrar("tela-config");
+  $("modo-supervisao").hidden = !api.ehLocal(urlView);
   if (!sessao) return mostrar("tela-login");
   const { ligado } = await chrome.storage.local.get("ligado");
   if (ligado) return ligar(); // painel reaberto com o copiloto ligado: retoma
@@ -59,6 +61,45 @@ function voltarAoLogin() {
   $("sair").hidden = true;
   $("erro-login").textContent = "Sua sessão expirou. Entre de novo.";
   mostrar("tela-login");
+}
+
+// ---------- modo supervisão (só local, só leitura) ----------
+async function carregarListaSup() {
+  const sel = $("supSelect");
+  try {
+    const atendentes = (await api.supAtendentes()).atendentes || [];
+    sel.innerHTML = atendentes.length
+      ? atendentes.map((a) => `<option value="${esc(a.login)}" data-nome="${esc(a.nome || "")}">${esc(a.nome || a.login)}${a.estado === "ready_service" ? " · em atendimento" : a.estado ? ` · ${esc(a.estado)}` : ""}</option>`).join("")
+      : '<option value="">Ninguém logado no Interact agora</option>';
+  } catch (erro) {
+    $("erro-supervisao").textContent = erro.message;
+  }
+}
+
+async function abrirSupervisao() {
+  $("erro-supervisao").textContent = "";
+  mostrar("tela-supervisao");
+  await carregarListaSup();
+}
+
+async function iniciarSupervisao() {
+  const sel = $("supSelect");
+  if (!sel.value) return;
+  $("erro-supervisao").textContent = "";
+  $("supAcompanhar").disabled = true;
+  try {
+    await api.supAcompanhar(sel.value, sel.selectedOptions[0]?.dataset.nome || "");
+    s.supervisao = true;
+    s.ligado = true;
+    s.escolhido = null;
+    s.verLista = false;
+    mostrar("tela-ligado");
+    consultar();
+  } catch (erro) {
+    $("erro-supervisao").textContent = erro.message;
+  } finally {
+    $("supAcompanhar").disabled = false;
+  }
 }
 
 async function tratar(erro, onde) {
@@ -114,19 +155,25 @@ async function consultar() {
   pararConsulta();
   if (!s.ligado) return;
   try {
-    s.estado = await api.estado();
-    s.erro = "";
-    // presença expirada (notebook dormiu, rede caiu): volta à escuta uma vez. Sem licença, só pelo botão.
-    if (s.estado.ativo === false && s.estado.status !== "sem_licenca" && !s.reativou) {
-      s.reativou = true;
-      s.estado = await api.ativar();
-    } else if (s.estado.ativo !== false) {
-      s.reativou = false;
+    if (s.supervisao) {
+      s.estado = await api.supEstado();
+      s.erro = "";
+      desenhar();  // só leitura: não registra uso, alertas nem CPF
+    } else {
+      s.estado = await api.estado();
+      s.erro = "";
+      // presença expirada (notebook dormiu, rede caiu): volta à escuta uma vez. Sem licença, só pelo botão.
+      if (s.estado.ativo === false && s.estado.status !== "sem_licenca" && !s.reativou) {
+        s.reativou = true;
+        s.estado = await api.ativar();
+      } else if (s.estado.ativo !== false) {
+        s.reativou = false;
+      }
+      acompanharUso();
+      registrarAlertas();
+      informarCpf();
+      desenhar();
     }
-    acompanharUso();
-    registrarAlertas();
-    informarCpf();
-    desenhar();
   } catch (erro) {
     await tratar(erro, "estado");
   }
@@ -430,7 +477,13 @@ function desenhar() {
   if (!s.ligado) return;
   const sit = s.erro ? { nivel: "erro", texto: s.erro } : s.aviso ? { nivel: "aviso", texto: s.aviso } : situacao(s.estado);
   $("situacao").className = `situacao ${sit.nivel}`;
-  $("situacao").innerHTML = `<span>${esc(sit.texto)}</span>${sit.nivel === "erro" ? '<button class="secundario" data-acao="tentar">Tentar de novo</button>' : ""}`;
+  if (s.supervisao) {
+    const alvo = s.estado?.atendente;
+    $("situacao").innerHTML = `<span>👁 Supervisão · ${esc(alvo?.alias || alvo?.login || "—")} · só leitura</span>`
+      + '<button class="secundario" data-acao="sup-trocar">Trocar atendente</button>';
+  } else {
+    $("situacao").innerHTML = `<span>${esc(sit.texto)}</span>${sit.nivel === "erro" ? '<button class="secundario" data-acao="tentar">Tentar de novo</button>' : ""}`;
+  }
   // sem conexão com o Interact a lista estaria vazia ou velha: mostra só o aviso
   const conectado = s.estado?.status === "conectado" || (s.estado?.conversas || []).length;
   const atual = conversaAtual();
@@ -442,6 +495,7 @@ function desenhar() {
   const ativo = document.activeElement;
   const foco = ativo?.dataset?.campo;
   const cursor = foco && (ativo.type === "text" || ativo.tagName === "TEXTAREA") ? [ativo.selectionStart, ativo.selectionEnd] : null;
+  $("conteudo").className = s.supervisao ? "sup" : "";
   $("conteudo").innerHTML = html;
   const campo = $("conteudo").querySelector('[data-campo="comentario"]');
   if (campo) campo.value = s.avaliacoes[campo.dataset.sugestao]?.comentario || "";
@@ -495,6 +549,11 @@ async function acao(evento) {
     const r = precosDoChat(atual.call_id).resultado;
     const cotacao = r.cotacoes.find((c) => c.checkin === alvo.dataset.checkin);
     if (await copiar(textoDaOferta(cotacao, r.cotacoes.find((c) => c.checkin === r.pedida)))) avisar("✓ Oferta copiada. Cole no Interact e revise antes de enviar.");
+  } else if (tipo === "sup-trocar") {
+    pararConsulta();
+    s.estado = null;
+    ultimoHtml = "";
+    await abrirSupervisao();
   } else if (tipo === "voltar") {
     s.verLista = true;
     desenhar();
@@ -568,6 +627,9 @@ $("form-login").addEventListener("submit", async (evento) => {
   }
 });
 $("ligar").addEventListener("click", ligar);
+$("modo-supervisao").addEventListener("click", abrirSupervisao);
+$("supAcompanhar").addEventListener("click", iniciarSupervisao);
+$("supAtualizar").addEventListener("click", carregarListaSup);
 $("desligar").addEventListener("click", desligar);
 $("sair").addEventListener("click", async () => {
   if (s.ligado) await desligar();

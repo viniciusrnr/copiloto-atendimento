@@ -54,3 +54,32 @@ export const hoteis = (termo) => chamar("GET", `/hoteis?${new URLSearchParams({ 
 export const precosHotel = (params) => chamar("GET", `/precos-hotel?${new URLSearchParams(params)}`);
 export const informarCpf = (callId, cpf) => chamar("POST", `/cliente/${id(callId)}`, { cpf });
 export const enviarEventos = (eventos) => chamar("POST", "/eventos", { eventos });
+
+// Modo supervisão: SÓ no ambiente local. Sem login, lê quem está atendendo e acompanha ao vivo (só leitura). As rotas
+// /local/supervisao/* existem apenas no script de teste local do view; em produção não há, por isso o modo não aparece.
+export function ehLocal(urlView) {
+  try {
+    const host = new URL(urlView).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+}
+
+async function chamarLocal(metodo, caminho, corpo) {
+  const { urlView } = await config();
+  if (!urlView) throw new Error("Configure o endereço do painel nas opções da extensão.");
+  let resposta;
+  try {
+    resposta = await fetch(`${urlView}/local/supervisao${caminho}`, { method: metodo,
+      headers: { "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : undefined });
+  } catch {
+    throw new Error("Sem conexão com o painel local.");
+  }
+  const payload = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw Object.assign(new Error(payload.message || "O painel local não respondeu."), { status: resposta.status });
+  return payload.data ?? payload;
+}
+export const supAtendentes = () => chamarLocal("GET", "/atendentes");
+export const supAcompanhar = (login, nome) => chamarLocal("POST", "/acompanhar", { login, nome });
+export const supEstado = () => chamarLocal("GET", "/estado");

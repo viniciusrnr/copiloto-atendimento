@@ -33,6 +33,19 @@
         <button class="primario largo" type="submit">Entrar</button>
       </form>
       <p id="erro-login" class="erro" role="alert"></p>
+      <button id="modo-supervisao" class="link" type="button" hidden>👁 Modo supervisão (local)</button>
+    </section>
+
+    <section id="tela-supervisao" hidden>
+      <h1>Supervisão</h1>
+      <p>Escolha quem está atendendo agora para acompanhar ao vivo. Só leitura, sem login (ambiente local).</p>
+      <label for="supSelect">Atendente</label>
+      <select id="supSelect"></select>
+      <div class="sup-botoes">
+        <button id="supAcompanhar" class="primario largo" type="button">Acompanhar</button>
+        <button id="supAtualizar" class="link" type="button">Atualizar lista</button>
+      </div>
+      <p id="erro-supervisao" class="erro" role="alert"></p>
     </section>
 
     <section id="tela-desligado" hidden>
