@@ -561,8 +561,12 @@ async function acao(evento) {
     desenhar();
   } else if (tipo === "gerar" && atual) {
     alvo.disabled = true;
-    registrar("pediu_sugestao", { callId: atual.call_id, dados: { gatilho: "botao" } });
-    try { await api.sugerir(atual.call_id, await historicoDaTela(atual.call_id)); } catch (erro) { await tratar(erro, "sugerir"); }
+    if (s.supervisao) {  // supervisão: gera pela conversa que o copiloto já captou (não registra uso)
+      try { await api.supSugerir(atual.call_id); } catch (erro) { avisar(erro.message); }
+    } else {
+      registrar("pediu_sugestao", { callId: atual.call_id, dados: { gatilho: "botao" } });
+      try { await api.sugerir(atual.call_id, await historicoDaTela(atual.call_id)); } catch (erro) { await tratar(erro, "sugerir"); }
+    }
     consultar();
   } else if ((tipo === "precos-abrir" || tipo === "precos-fechar") && atual) {
     const p = precosDoChat(atual.call_id);
