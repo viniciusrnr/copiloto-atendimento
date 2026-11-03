@@ -83,3 +83,4 @@ async function chamarLocal(metodo, caminho, corpo) {
 export const supAtendentes = () => chamarLocal("GET", "/atendentes");
 export const supAcompanhar = (login, nome) => chamarLocal("POST", "/acompanhar", { login, nome });
 export const supEstado = () => chamarLocal("GET", "/estado");
+export const supAuto = () => chamarLocal("GET", "/auto");  // acompanha o 1º atendente em serviço com chat aberto

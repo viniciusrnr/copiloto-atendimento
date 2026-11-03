@@ -82,6 +82,15 @@ async function abrirSupervisao() {
   await carregarListaSup();
 }
 
+function ligarSupervisao() {
+  s.supervisao = true;
+  s.ligado = true;
+  s.escolhido = null;
+  s.verLista = false;
+  mostrar("tela-ligado");
+  consultar();
+}
+
 async function iniciarSupervisao() {
   const sel = $("supSelect");
   if (!sel.value) return;
@@ -89,16 +98,33 @@ async function iniciarSupervisao() {
   $("supAcompanhar").disabled = true;
   try {
     await api.supAcompanhar(sel.value, sel.selectedOptions[0]?.dataset.nome || "");
-    s.supervisao = true;
-    s.ligado = true;
-    s.escolhido = null;
-    s.verLista = false;
-    mostrar("tela-ligado");
-    consultar();
+    ligarSupervisao();
   } catch (erro) {
     $("erro-supervisao").textContent = erro.message;
   } finally {
     $("supAcompanhar").disabled = false;
+  }
+}
+
+async function iniciarSupervisaoAuto() {
+  $("erro-supervisao").textContent = "";
+  const botao = $("supAuto");
+  const texto = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = "Procurando quem está em atendimento…";
+  try {
+    const est = await api.supAuto();
+    if (est._auto === "nenhum") {
+      $("erro-supervisao").textContent = `Ninguém em atendimento agora (olhei ${est._tentados || 0}). Tente de novo em instantes.`;
+      return;
+    }
+    s.estado = est;
+    ligarSupervisao();
+  } catch (erro) {
+    $("erro-supervisao").textContent = erro.message;
+  } finally {
+    botao.disabled = false;
+    botao.textContent = texto;
   }
 }
 
@@ -629,6 +655,7 @@ $("form-login").addEventListener("submit", async (evento) => {
 $("ligar").addEventListener("click", ligar);
 $("modo-supervisao").addEventListener("click", abrirSupervisao);
 $("supAcompanhar").addEventListener("click", iniciarSupervisao);
+$("supAuto").addEventListener("click", iniciarSupervisaoAuto);
 $("supAtualizar").addEventListener("click", carregarListaSup);
 $("desligar").addEventListener("click", desligar);
 $("sair").addEventListener("click", async () => {

@@ -114,3 +114,5 @@ input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border
 .sup [data-acao="precos-buscar"], .sup [data-acao="precos-hotel"] { display: none !important; }
 .sup-botoes { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 #supSelect { width: 100%; min-height: 36px; padding: 6px 8px; }
+
+.sup-ou { margin: 10px 0 2px; color: #666; font-size: 13px; }
