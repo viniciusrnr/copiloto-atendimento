@@ -1,8 +1,8 @@
 import * as api from "../src/api.js";
 import { enviar, iniciarFila, limparFila, novaSessao, registrar } from "../src/eventos.js";
 import {
-  alertaParaEvento, chatSelecionado, clienteFalouDeNovo, respostaDoAtendente, resumo, situacao, textoDaOferta, textoDoAlerta,
-  ultimaDoCliente, usoDaSugestao,
+  alertaParaEvento, chatSelecionado, clienteFalouDeNovo, maisBarataQue, respostaDoAtendente, resumo, situacao, textoDaOferta,
+  textoDoAlerta, ultimaDoCliente, usoDaSugestao, valorDoCliente,
 } from "../src/regras.js";
 
 const INTERVALO_MS = 3000;
@@ -297,16 +297,17 @@ function desenharPrecos() {
     const selo = (c.checkin === r.mais_barata ? '<span class="selo barata">Mais barata</span>' : "")
       + (c.checkin === r.pedida ? '<span class="selo">Pedida</span>' : "");
     return `<li class="${c.checkin === r.mais_barata ? "barata" : ""}"><span class="data">${esc(diaSemana(c.checkin))}</span>${selo}
-      <span class="valor">${c.disponivel ? `${c.pontos.toLocaleString("pt-BR")} pts + ${esc(reais(c.dinheiro))}`
+      <span class="valor">${c.disponivel ? esc(valorDoCliente(c))
         : c.erro ? "não consegui consultar" : c.filtro === "sem_quarto" ? "sem quarto com esse filtro"
         : c.filtro === "valor_no_site" ? "tem quarto, valor só no site" : "não confirmado: veja no site"}</span>
       ${c.quartos?.length ? `<span class="quarto">${esc(c.quartos[0].quarto)} · ${esc(c.quartos[0].regime)} · ${c.quartos[0].reembolsavel ? "cancelamento grátis" : "não reembolsável"}${c.quartos.length > 1 ? ` <span class="nota">(+${c.quartos.length - 1} tipo${c.quartos.length > 2 ? "s" : ""})</span>` : ""}</span>` : ""}
-      ${c.disponivel && c.checkin !== r.pedida && !(pedida?.disponivel && c.equivalente >= pedida.equivalente) ? `<button class="link" data-acao="precos-copiar" data-checkin="${c.checkin}">Copiar oferta</button>` : ""}</li>`;
+      ${c.disponivel && c.checkin !== r.pedida && !(pedida?.disponivel && !maisBarataQue(c, pedida)) ? `<button class="link" data-acao="precos-copiar" data-checkin="${c.checkin}">Copiar oferta</button>` : ""}</li>`;
   }).join("") : "";
   const barata = r?.cotacoes.find((c) => c.checkin === r.mais_barata);
   const resumoTexto = !r ? "" : !barata ? '<p class="aviso-caixa">Nenhuma data confirmada nesses dias. Pode ser falta de quarto ou o fornecedor fora do ar: confira no site antes de dizer ao cliente que não há vaga.</p>'
     : r.mais_barata === r.pedida ? '<p class="aviso-caixa">A data pedida já é a mais barata desses dias.</p>'
-    : r.economia ? `<p class="aviso-caixa">Entrando em ${esc(diaSemana(r.mais_barata))} o cliente economiza o equivalente a ${esc(reais(r.economia))}.</p>` : "";
+    : r.economia ? `<p class="aviso-caixa">Entrando em ${esc(diaSemana(r.mais_barata))} o cliente economiza o equivalente a ${esc(reais(r.economia))}.</p>`
+    : r.diarias_a_menos > 0 ? `<p class="aviso-caixa">Entrando em ${esc(diaSemana(r.mais_barata))} o cliente usa ${r.diarias_a_menos} ${r.diarias_a_menos === 1 ? "diária" : "diárias"} a menos do plano.</p>` : "";
   const quartos = barata?.quartos?.length > 1 ? `<p class="nota">Outros quartos na mais barata: ${esc(barata.quartos.slice(1).map((q) => `${q.quarto} (${q.regime})`).join(", "))}</p>` : "";
   return `<div class="precos">
     <div class="detalhe-topo"><h3>💰 Datas mais baratas</h3><button class="link" data-acao="precos-fechar" aria-label="Fechar">✕</button></div>
@@ -317,7 +318,8 @@ function desenharPrecos() {
       <button class="primario largo" data-acao="precos-buscar" ${p.buscando ? "disabled" : ""}>${p.buscando ? "Consultando 7 datas…" : "Buscar"}</button></div>
     ${p.erro ? `<p class="aviso-caixa">${esc(p.erro)}</p>` : ""}${escolhas}
     ${r ? `<h4 class="rotulo-sugestoes">${esc(r.hotel || `Hotel #${r.id_hotel}`)}</h4><ul class="cotacoes">${linhas}</ul>${resumoTexto}${quartos}
-      <p class="nota">Demonstração: valores do plano de quem está logado no Reservas, não do cliente. "Não confirmado" pode ser falta de quarto ou o fornecedor fora do ar. O prazo do cancelamento grátis está no detalhe do hotel, no site.</p>` : ""}
+      <p class="nota">${r.plano === "cliente" ? `Valores no plano de <b>${esc(r.cliente || "cliente do chat")}</b> (cliente da ficha).`
+        : "Demonstração: valores do plano da conta configurada no copiloto, não do cliente do chat."} "Não confirmado" pode ser falta de quarto ou o fornecedor fora do ar. O prazo do cancelamento grátis está no detalhe do hotel, no site.</p>` : ""}
   </div>`;
 }
 
@@ -348,7 +350,7 @@ async function buscarPrecos(idHotel) {
   desenhar();
   try {
     p.resultado = await api.precosHotel({ hotel: idHotel || termo, checkin: p.form.checkin, noites: p.form.noites, adultos: p.form.adultos,
-      cafe: p.form.cafe ? 1 : 0, reembolsavel: p.form.reembolsavel ? 1 : 0 });
+      cafe: p.form.cafe ? 1 : 0, reembolsavel: p.form.reembolsavel ? 1 : 0, call: conversaAtual()?.call_id || "" });
   } catch (erro) {
     if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
     p.erro = erro.message;

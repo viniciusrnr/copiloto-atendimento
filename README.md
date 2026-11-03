@@ -61,5 +61,5 @@ Não tem build nem dependências: é JavaScript puro, em módulos ES.
   - o CPF é lido em `textarea[id^="text_area_dados_associados"]`. Na captura atual esse campo veio vazio; se o CPF aparecer em outro lugar, ajuste só a função `cpfNaTela` em `src/content.js`.
 - **Trava do Enviar, a confirmar no Interact de verdade:** que o Enter do Interact não dispara antes da extensão (testado só na tela capturada) e que o clique da extensão em Enviar manda a mensagem. Se o clique não enviar, o próximo Enter do atendente (em até 10 s) passa direto.
 - **Eventos da trava** (`alerta` antes de enviar, `corrigiu_alerta`) só são gravados com o painel lateral aberto.
-- **Preços (demo):** o valor é o do plano da conta do portal configurada no worker (`RESERVAS_USUARIO`), não o do cliente do chat; o prazo do cancelamento grátis só aparece no site. Para produção, o Reservas precisa liberar um usuário de serviço.
+- **Preços:** com a conta de serviço interna do Reservas no worker, o valor sai no plano do cliente da ficha do chat aberto (a tela diz de quem); com conta de assinante, sai no plano dela e a tela avisa que é demonstração. O valor mostra as diárias do plano, os pontos e o dinheiro. O prazo do cancelamento grátis só aparece no site.
 - **Painel lateral fechado:** as consultas param. O servidor tira o atendente da assinatura depois de 2 min sem consulta.

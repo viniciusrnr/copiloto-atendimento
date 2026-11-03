@@ -189,7 +189,18 @@ export function textoDoAlerta(alerta) {
 }
 
 const diaMes = (iso) => String(iso).split("-").reverse().slice(0, 2).join("/");
-const valorDoCliente = (c) => `${c.pontos.toLocaleString("pt-BR")} pontos + ${c.dinheiro.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`;
+/** O que o cliente usa do plano e paga: "5 diárias", "2 diárias + R$ 120,00", "10.800 pontos + R$ 1.267,65". */
+export function valorDoCliente(c) {
+  const partes = [];
+  if (c.diarias) partes.push(`${c.diarias} ${c.diarias === 1 ? "diária" : "diárias"}`);
+  if (c.pontos) partes.push(`${c.pontos.toLocaleString("pt-BR")} pontos`);
+  if (c.dinheiro || !partes.length) partes.push(c.dinheiro.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
+  return partes.join(" + ");
+}
+
+/** A cotação sai mais barata que a outra: menos dinheiro + pontos; no empate, menos diárias do plano. */
+export const maisBarataQue = (c, outra) => c.equivalente < outra.equivalente
+  || (c.equivalente === outra.equivalente && (c.diarias || 0) < (outra.diarias || 0));
 
 /** Frase para o atendente oferecer a data mais barata (cotação do motor do Reservas, no valor do assinante). */
 export function textoDaOferta(cotacao, pedida) {

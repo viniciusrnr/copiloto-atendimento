@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import {
   alertaParaEvento, chatAtivo, chatSelecionado, clienteFalouDeNovo, cpfValido, evento, extrairCpf, respostaDoAtendente,
-  situacao, textoDaOferta, textoDoAlerta, usoDaSugestao, uuidDoId,
+  maisBarataQue, situacao, textoDaOferta, textoDoAlerta, usoDaSugestao, uuidDoId, valorDoCliente,
 } from "../src/regras.js";
 
 const A = "11111111-aaaa-4bbb-8ccc-000000000001";
@@ -102,4 +102,13 @@ test("oferta da data mais barata: valor do cliente nas duas datas, sem preço do
   assert.match(texto, /entrando em 28\/01, com 2 noites no quarto STANDARD \(Pensão Completa\), fica 8\.000 pontos \+ R\$ 900,00\./);
   assert.match(texto, /Entrando em 27\/01 ficaria 10\.800 pontos \+ R\$ 1\.267,65\./);
   assert.doesNotMatch(textoDaOferta(barata, { ...pedida, disponivel: false }), /ficaria/); // data pedida sem quarto: não compara
+});
+
+test("plano que paga com diárias: mostra as diárias e a mais barata é a que gasta menos", () => {
+  assert.equal(valorDoCliente({ diarias: 5, pontos: 0, dinheiro: 0 }), "5 diárias");  // não "0 pontos + R$ 0,00"
+  assert.equal(valorDoCliente({ diarias: 1, pontos: 0, dinheiro: 120 }).replace(/\s/g, " "), "1 diária + R$ 120,00");
+  assert.equal(valorDoCliente({ diarias: 0, pontos: 0, dinheiro: 0 }).replace(/\s/g, " "), "R$ 0,00");
+  assert.ok(maisBarataQue({ equivalente: 0, diarias: 3 }, { equivalente: 0, diarias: 5 }));
+  assert.ok(!maisBarataQue({ equivalente: 0, diarias: 5 }, { equivalente: 0, diarias: 5 }));  // empate: não oferece
+  assert.ok(!maisBarataQue({ equivalente: 10, diarias: 1 }, { equivalente: 5, diarias: 4 }));
 });
