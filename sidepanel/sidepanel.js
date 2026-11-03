@@ -24,6 +24,7 @@ const s = {
   avaliacoes: {}, // sugestao_id -> {nota, comentario, enviada}
   verLista: false, // "← Chats": mostra só a lista até escolher outro chat
   supervisao: false, // modo supervisão local: sem login, acompanha quem está atendendo (só leitura)
+  fichaAberta: false, // ficha do cliente começa recolhida (uma linha); expande ao clicar
   // "Cliente achou caro?": o hotel em datas vizinhas no valor do cliente (motor do Reservas), um estado por chat
   precos: {},  // call_id -> { aberto, form, escolhas, buscando, erro, resultado }
 };
@@ -467,6 +468,47 @@ function alertaAtual(conversa) {
   return ultima?.alertas?.length ? { mensagem: ultima, alerta: ultima.alertas[0] } : null;
 }
 
+const brDataF = (iso) => (iso ? esc(String(iso).slice(0, 10).split("-").reverse().join("/")) : "\u2014");
+const realF = (txt) => (txt == null ? "\u2014" : Number(txt).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
+
+// ficha do cliente (dados da conta): recolhida mostra um resumo; expandida, títulos, parcelas, boletos e reservas
+function desenharFicha(conversa) {
+  const f = conversa.ficha;
+  if (!f || !f.cliente) {
+    const msg = conversa.cliente_identificado === false
+      ? "Cliente não identificado: o Interact não mandou CPF nem código."
+      : "A ficha aparece quando o cliente é identificado (CPF ou código).";
+    return `<div class="ex-ficha"><div class="ex-ficha-vazio"><b>Ficha do cliente</b> <span class="nota">${msg}</span></div></div>`;
+  }
+  const c = f.cliente, r = f.resumo || {};
+  const atrasadas = (f.parcelas || []).filter((x) => x.status === 3);
+  const proxima = (f.reservas || []).filter((x) => x.status !== "CANCELADA" && x.entrada).sort((a, b) => a.entrada.localeCompare(b.entrada))[0];
+  const resumo = [c.nome, r.parcelas_atraso ? `${r.parcelas_atraso} em atraso (${realF(r.valor_atraso)})` : "sem atraso",
+    proxima ? `reserva ${proxima.hotel} ${brDataF(proxima.entrada)}` : ""].filter(Boolean).join(" \u00b7 ");
+  const lista = (itens, vazio, linha) => ((itens && itens.length) ? `<ul class="ex-lista">${itens.map(linha).join("")}</ul>` : `<div class="nota">${vazio}</div>`);
+  return `<div class="ex-ficha">
+    <button class="ex-ficha-topo" data-acao="ficha-toggle" aria-expanded="${s.fichaAberta}">
+      <b>Ficha do cliente</b><span class="ex-ficha-linha">${esc(resumo)}</span>
+      <span class="ex-ficha-seta">${s.fichaAberta ? "Recolher \u25b2" : "Expandir \u25bc"}</span>
+    </button>
+    ${s.fichaAberta ? `<div class="ex-ficha-corpo">
+      <div class="ex-cliente"><b>${esc(c.nome)}</b><span>CPF ${esc(c.cpf || "\u2014")} \u00b7 código ${esc(c.codigo)}</span></div>
+      <div class="ex-numeros">
+        <div><span>Em atraso</span><b>${esc(r.parcelas_atraso || 0)} \u00b7 ${realF(r.valor_atraso)}</b></div>
+        <div><span>Saldo de diárias</span><b>${esc(r.saldo_diarias ?? 0)}</b></div>
+      </div>
+      <div class="ex-secao">Títulos</div>
+      ${lista(f.titulos, "Sem títulos", (x) => `<li><span>${esc(x.numero)}</span><span class="pill ${x.status === 0 ? "ok" : "warn"}">${esc(x.status_nome || "")}</span></li>`)}
+      <div class="ex-secao">Parcelas em atraso</div>
+      ${lista(atrasadas, "Nenhuma", (x) => `<li><span>Venceu ${brDataF(x.vencimento)}</span><b>${realF(x.valor_receber || x.valor)}</b></li>`)}
+      <div class="ex-secao">Boletos em aberto</div>
+      ${lista(f.boletos, "Nenhum", (x) => `<li><span>Vence ${brDataF(x.vencimento)}</span><b>${realF(x.valor)}</b></li>`)}
+      <div class="ex-secao">Reservas</div>
+      ${lista(f.reservas, "Nenhuma nos últimos 90 dias", (x) => `<li class="ex-reserva"><span><b>${esc(x.hotel)}</b> \u00b7 ${esc(x.cidade || "")}/${esc(x.uf || "")}</span><span>${brDataF(x.entrada)} a ${brDataF(x.saida)} \u00b7 ${esc(x.status || "")}</span></li>`)}
+    </div>` : ""}
+  </div>`;
+}
+
 function desenharDetalhe(conversa) {
   if (!conversa) {
     return (s.estado?.conversas || []).length ? ""
@@ -482,6 +524,7 @@ function desenharDetalhe(conversa) {
     : desenharSugestoes(conversa, ultima);
   return `<div class="detalhe">
     <div class="detalhe-topo"><button class="link voltar" data-acao="voltar" aria-label="Voltar para a lista de chats">←</button><h3>${esc(conversa.cliente || "Cliente")}</h3>${conversa.call_id === s.naTela ? '<span class="selo tela">Na tela</span>' : ""}${selos(conversa)}</div>
+    ${desenharFicha(conversa)}
     ${critico}${desenharConversa(conversa, ultima)}
     ${alerta ? `<div class="alerta-atendente">⚠ ${esc(textoDoAlerta(alerta.alerta))}</div>` : ""}
     ${corpo}
@@ -584,6 +627,9 @@ async function acao(evento) {
     s.estado = null;
     ultimoHtml = "";
     await abrirSupervisao();
+  } else if (tipo === "ficha-toggle") {
+    s.fichaAberta = !s.fichaAberta;
+    desenhar();
   } else if (tipo === "voltar") {
     s.verLista = true;
     desenhar();

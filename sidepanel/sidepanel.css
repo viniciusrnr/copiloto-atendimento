@@ -116,3 +116,20 @@ input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border
 #supSelect { width: 100%; min-height: 36px; padding: 6px 8px; }
 
 .sup-ou { margin: 10px 0 2px; color: #666; font-size: 13px; }
+
+/* ficha do cliente na extensão (recolhida por padrão) */
+.ex-ficha { border: 1px solid var(--borda, #e3e8e6); border-radius: 8px; margin: 8px 0; background: #fbfdfc; }
+.ex-ficha-vazio { padding: 8px 10px; }
+.ex-ficha-topo { width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 8px 10px; text-align: left; cursor: pointer; }
+.ex-ficha-linha { flex: 1; min-width: 0; color: #555; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-ficha-seta { color: var(--marca); font-size: 12px; white-space: nowrap; }
+.ex-ficha-corpo { padding: 0 10px 10px; }
+.ex-cliente { display: flex; flex-direction: column; margin-bottom: 6px; }
+.ex-cliente span { color: #666; font-size: 12px; }
+.ex-numeros { display: flex; gap: 10px; margin-bottom: 6px; }
+.ex-numeros div { flex: 1; background: #fff; border: 1px solid #eee; border-radius: 6px; padding: 6px 8px; }
+.ex-numeros span { display: block; color: #666; font-size: 11px; }
+.ex-secao { font-weight: 600; font-size: 12px; margin: 8px 0 2px; color: #333; }
+.ex-lista { list-style: none; margin: 0; padding: 0; }
+.ex-lista li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+.ex-reserva { flex-direction: column; }
