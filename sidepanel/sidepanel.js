@@ -23,9 +23,15 @@ const s = {
   vistas: new Map(), // sugestao_id -> {callId, seq, sugestoes, exibidaEm, usada, fim}
   avaliacoes: {}, // sugestao_id -> {nota, comentario, enviada}
   verLista: false, // "← Chats": mostra só a lista até escolher outro chat
-  // "Cliente achou caro?": o hotel em datas vizinhas no valor do assinante (motor do Reservas)
-  precos: { aberto: false, form: { hotel: "", checkin: "", noites: "2", adultos: "2", cafe: false, reembolsavel: false }, escolhas: null, buscando: false, erro: "", resultado: null },
+  // "Cliente achou caro?": o hotel em datas vizinhas no valor do cliente (motor do Reservas), um estado por chat
+  precos: {},  // call_id -> { aberto, form, escolhas, buscando, erro, resultado }
 };
+
+// o painel de preços de um chat (criado na 1ª vez): cada cliente tem a sua consulta, nada vaza de uma conversa para outra
+function precosDoChat(callId) {
+  return (s.precos[callId] ||= { aberto: false, form: { hotel: "", checkin: "", noites: "2", adultos: "2", cafe: false, reembolsavel: false },
+    escolhas: null, buscando: false, erro: "", resultado: null });
+}
 
 // ---------- telas ----------
 function mostrar(tela) {
@@ -284,8 +290,8 @@ function desenharSugestoes(conversa, ultima) {
 const reais = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const diaSemana = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 
-function desenharPrecos() {
-  const p = s.precos;
+function desenharPrecos(callId) {
+  const p = precosDoChat(callId);
   if (!p.aberto) return '<button class="link precos-abrir" data-acao="precos-abrir">💰 Cliente achou caro? Ver datas mais baratas</button>';
   const campo = (nome, rotulo, tipo, extra = "") =>
     `<label class="campo-preco"><span>${rotulo}</span><input type="${tipo}" data-campo="preco-${nome}" ${extra}></label>`;
@@ -324,7 +330,9 @@ function desenharPrecos() {
 }
 
 async function buscarPrecos(idHotel) {
-  const p = s.precos;
+  const atual = conversaAtual();
+  if (!atual) return;  // preços só dentro de um chat
+  const p = precosDoChat(atual.call_id);
   if (p.buscando) return;  // Enter durante a consulta
   const termo = p.form.hotel.trim();
   p.erro = "";
@@ -350,7 +358,7 @@ async function buscarPrecos(idHotel) {
   desenhar();
   try {
     p.resultado = await api.precosHotel({ hotel: idHotel || termo, checkin: p.form.checkin, noites: p.form.noites, adultos: p.form.adultos,
-      cafe: p.form.cafe ? 1 : 0, reembolsavel: p.form.reembolsavel ? 1 : 0, call: conversaAtual()?.call_id || "" });
+      cafe: p.form.cafe ? 1 : 0, reembolsavel: p.form.reembolsavel ? 1 : 0, call: atual.call_id });
   } catch (erro) {
     if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
     p.erro = erro.message;
@@ -426,8 +434,9 @@ function desenhar() {
   // sem conexão com o Interact a lista estaria vazia ou velha: mostra só o aviso
   const conectado = s.estado?.status === "conectado" || (s.estado?.conversas || []).length;
   const atual = conversaAtual();
-  const html = (conectado && !(sit.nivel === "erro" && !s.erro) ? desenharDetalhe(atual) + desenharChats(s.estado?.conversas || [], atual?.call_id) : "")
-    + desenharPrecos();
+  const html = conectado && !(sit.nivel === "erro" && !s.erro)
+    ? desenharDetalhe(atual) + (atual ? desenharPrecos(atual.call_id) : "") + desenharChats(s.estado?.conversas || [], atual?.call_id)
+    : "";
   if (html === ultimoHtml) return; // não redesenha à toa (mantém foco e cliques)
   ultimoHtml = html;
   const ativo = document.activeElement;
@@ -436,7 +445,7 @@ function desenhar() {
   $("conteudo").innerHTML = html;
   const campo = $("conteudo").querySelector('[data-campo="comentario"]');
   if (campo) campo.value = s.avaliacoes[campo.dataset.sugestao]?.comentario || "";
-  for (const [nome, valor] of Object.entries(s.precos.form)) {
+  for (const [nome, valor] of Object.entries(atual ? precosDoChat(atual.call_id).form : {})) {
     const entrada = $("conteudo").querySelector(`[data-campo="preco-${nome}"]`);
     if (entrada?.type === "checkbox") entrada.checked = valor;
     else if (entrada) entrada.value = valor;
@@ -475,14 +484,15 @@ async function acao(evento) {
     registrar("pediu_sugestao", { callId: atual.call_id, dados: { gatilho: "botao" } });
     try { await api.sugerir(atual.call_id, await historicoDaTela(atual.call_id)); } catch (erro) { await tratar(erro, "sugerir"); }
     consultar();
-  } else if (tipo === "precos-abrir" || tipo === "precos-fechar") {
-    s.precos.aberto = tipo === "precos-abrir";
-    if (s.precos.aberto && !s.precos.form.checkin) s.precos.form.checkin = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+  } else if ((tipo === "precos-abrir" || tipo === "precos-fechar") && atual) {
+    const p = precosDoChat(atual.call_id);
+    p.aberto = tipo === "precos-abrir";
+    if (p.aberto && !p.form.checkin) p.form.checkin = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
     desenhar();
   } else if (tipo === "precos-buscar" || tipo === "precos-hotel") {
     buscarPrecos(alvo.dataset.id);
-  } else if (tipo === "precos-copiar" && s.precos.resultado) {
-    const r = s.precos.resultado;
+  } else if (tipo === "precos-copiar" && atual && precosDoChat(atual.call_id).resultado) {
+    const r = precosDoChat(atual.call_id).resultado;
     const cotacao = r.cotacoes.find((c) => c.checkin === alvo.dataset.checkin);
     if (await copiar(textoDaOferta(cotacao, r.cotacoes.find((c) => c.checkin === r.pedida)))) avisar("✓ Oferta copiada. Cole no Interact e revise antes de enviar.");
   } else if (tipo === "voltar") {
@@ -573,7 +583,7 @@ $("tela-ligado").addEventListener("click", acao);
 $("tela-ligado").addEventListener("input", (evento) => {
   const campo = evento.target;
   if (campo.dataset.campo === "comentario") s.avaliacoes[campo.dataset.sugestao].comentario = campo.value;
-  else if (campo.dataset.campo?.startsWith("preco-")) s.precos.form[campo.dataset.campo.slice(6)] = campo.type === "checkbox" ? campo.checked : campo.value;
+  else if (campo.dataset.campo?.startsWith("preco-")) { const a = conversaAtual(); if (a) precosDoChat(a.call_id).form[campo.dataset.campo.slice(6)] = campo.type === "checkbox" ? campo.checked : campo.value; }
 });
 $("tela-ligado").addEventListener("keydown", (evento) => {
   if (evento.key === "Enter" && evento.target.dataset.campo?.startsWith("preco-")) buscarPrecos();
