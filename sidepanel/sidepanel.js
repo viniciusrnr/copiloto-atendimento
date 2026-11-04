@@ -541,13 +541,15 @@ function desenharDetalhe(conversa) {
     : !ultima ? `<button class="primario largo ajuda" data-acao="gerar">✨ Quero ajuda do copiloto</button>
       <p class="nota centro">A IA lê a conversa que está aberta no Interact e gera 2 respostas para a última mensagem do cliente.</p>`
     : desenharSugestoes(conversa, ultima);
+  // hierarquia (o que ajuda a responder AGORA): alertas → conversa → sugestões → selo/ofertas → ficha (secundária)
   return `<div class="detalhe">
     <div class="detalhe-topo"><button class="link voltar" data-acao="voltar" aria-label="Voltar para a lista de chats">←</button><h3>${esc(conversa.cliente || "Cliente")}</h3>${conversa.call_id === s.naTela ? '<span class="selo tela">Na tela</span>' : ""}${selos(conversa)}</div>
     ${desenharStatusCliente(conversa)}
-    ${desenharFicha(conversa)}
-    ${critico}${desenharConversa(conversa, ultima)}
+    ${critico}
     ${alerta ? `<div class="alerta-atendente">⚠ ${esc(textoDoAlerta(alerta.alerta))}</div>` : ""}
+    ${desenharConversa(conversa, ultima)}
     ${corpo}
+    ${desenharFicha(conversa)}
   </div>`;
 }
 

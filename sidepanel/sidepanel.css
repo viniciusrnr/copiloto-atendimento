@@ -2,107 +2,129 @@
   --marca: #0b6e4f; --marca-escura: #085a40; --marca-clara: #e3f3ec;
   --texto: #1f2933; --suave: #52606d; --borda: #d9e0e6; --fundo: #f6f8fa;
   --aviso: #8a5300; --aviso-claro: #fff4e0; --erro: #b42318; --erro-claro: #fdecea;
+  /* espaçamento, raio e sombra padronizados (calma visual, ritmo consistente) */
+  --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px;
+  --raio: 8px; --raio-g: 12px; --raio-pill: 999px;
+  --sombra: 0 1px 3px rgba(16, 24, 40, .06);
 }
 * { box-sizing: border-box; }
-body { margin: 0; font: 14px/1.4 system-ui, "Segoe UI", sans-serif; color: var(--texto); background: var(--fundo); min-width: 300px; }
+body { margin: 0; font: 14px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--texto); background: var(--fundo); min-width: 300px; }
 [hidden] { display: none !important; }
-h1 { font-size: 18px; margin: 8px 0; }
+h1 { font-size: 18px; margin: var(--e2) 0; }
+h2 { font-size: 14px; }
 p { color: var(--suave); margin: 6px 0; }
-button { font: inherit; cursor: pointer; border-radius: 8px; }
+button { font: inherit; cursor: pointer; border-radius: var(--raio); }
 button:disabled { cursor: default; opacity: .6; }
-button:focus-visible, input:focus-visible, .chat:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .chat:focus-visible, .ex-ficha-topo:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
 
-.topo { display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 10px 0 14px; background: #fff; border-bottom: 1px solid var(--borda); position: sticky; top: 0; z-index: 2; }
+.topo { display: flex; align-items: center; gap: var(--e1); height: 52px; padding: 0 10px 0 14px; background: #fff; border-bottom: 1px solid var(--borda); position: sticky; top: 0; z-index: 2; }
+.topo strong { font-size: 15px; }
 .usuario { flex: 1; color: var(--suave); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link { background: none; border: 0; color: var(--marca); min-height: 32px; padding: 6px 8px; }
-main { padding: 12px 14px 16px; }
+.link { background: none; border: 0; color: var(--marca); min-height: 32px; padding: 6px 8px; border-radius: var(--raio); }
+.link:hover:not(:disabled) { background: var(--marca-clara); }
+main { padding: var(--e3) 14px var(--e4); }
 .primario { background: var(--marca); color: #fff; border: 0; padding: 10px 16px; font-weight: 600; }
 .primario:hover:not(:disabled) { background: var(--marca-escura); }
 /* desativado com instrução ("Abra este chat no Interact"): legível, não apagado */
-.primario:disabled { opacity: 1; background: #e3f3ec; color: #085a40; }
+.primario:disabled { opacity: 1; background: var(--marca-clara); color: var(--marca-escura); }
 .secundario { background: #fff; color: var(--texto); border: 1px solid var(--borda); padding: 8px 14px; }
-.largo { width: 100%; margin-top: 12px; }
-label { display: block; font-weight: 600; margin: 10px 0 4px; }
-input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; }
+.secundario:hover:not(:disabled) { background: var(--fundo); }
+.largo { width: 100%; margin-top: var(--e3); }
+label { display: block; font-weight: 600; margin: 10px 0 var(--e1); }
+input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border: 1px solid var(--borda); border-radius: var(--raio); font: inherit; }
 .erro { color: var(--erro); min-height: 1em; }
 
 #tela-desligado { text-align: center; padding-top: 24px; }
-.play { width: 88px; height: 88px; border-radius: 50%; border: 0; background: var(--marca); color: #fff; font-size: 34px; padding-left: 8px; box-shadow: 0 4px 14px rgba(11,110,79,.3); }
+.play { width: 88px; height: 88px; border-radius: 50%; border: 0; background: var(--marca); color: #fff; font-size: 34px; padding-left: var(--e2); box-shadow: 0 4px 14px rgba(11, 110, 79, .3); }
 .play:hover { background: var(--marca-escura); }
 
-.situacao { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 10px; position: sticky; top: 52px; z-index: 1; }
+/* barra de situação (sticky): cor só para dizer o estado da conexão */
+.situacao { display: flex; flex-wrap: wrap; gap: var(--e2); align-items: flex-start; padding: var(--e2) 10px; border-radius: var(--raio); font-size: 13px; margin-bottom: 10px; position: sticky; top: 52px; z-index: 1; }
 .situacao span { flex: 1; min-width: 0; }
 .situacao button { min-height: 32px; padding: 6px 12px; }
 .situacao::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: currentColor; }
 .situacao.ok { background: var(--marca-clara); color: var(--marca-escura); }
 .situacao.aviso { background: var(--aviso-claro); color: var(--aviso); }
 .situacao.erro { background: var(--erro-claro); color: var(--erro); font-weight: 600; }
-.rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); margin: 4px 0 6px; }
+.rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); margin: var(--e3) 0 6px; }
 
-.chats { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
-.chat { width: 100%; text-align: left; background: #fff; border: 1px solid var(--borda); padding: 8px 10px; display: grid; gap: 2px; }
-.chat .linha { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+/* lista de chats */
+.chats { list-style: none; margin: 0 0 var(--e3); padding: 0; display: grid; gap: 6px; }
+.chat { width: 100%; text-align: left; background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); padding: var(--e2) 10px; display: grid; gap: 2px; }
+.chat:hover { border-color: var(--marca); }
+.chat .linha { display: flex; flex-wrap: wrap; gap: var(--e1) 6px; align-items: center; }
 .chat .nome { font-weight: 600; flex: 1 1 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat .hora { font-size: 12px; color: var(--suave); }
+.chat .hora { font-size: 12px; color: var(--suave); margin-left: auto; }
 .chat .ultima { font-size: 12px; color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vazio { background: #fff; border: 1px dashed var(--borda); border-radius: 8px; padding: 14px; color: var(--suave); }
+.vazio { background: #fff; border: 1px dashed var(--borda); border-radius: var(--raio); padding: 14px; color: var(--suave); }
 
-.selo { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+/* selos (chips de status): discretos; vermelho só para risco */
+.selo { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--raio-pill); white-space: nowrap; }
 .selo.tela { background: #e8eefc; color: #2747a8; }
 .selo.bravo, .selo.critico { background: var(--erro-claro); color: var(--erro); }
 .selo.comparacao { background: var(--aviso-claro); color: var(--aviso); }
+.selo.aguardando { background: var(--aviso-claro); color: var(--aviso); }
 
-.detalhe { background: #fff; border: 1px solid var(--marca); border-radius: 10px; padding: 12px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
-.detalhe-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 6px; }
-.detalhe-topo h3 { margin: 0; font-size: 15px; flex: 1 1 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.voltar { font-size: 18px; padding: 0 6px; min-height: 28px; }
+/* pills (status de título/parcela e observações) */
+.pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--raio-pill); white-space: nowrap; background: var(--fundo); color: var(--suave); }
+.pill.ok { background: var(--marca-clara); color: var(--marca-escura); }
+.pill.warn { background: var(--aviso-claro); color: var(--aviso); }
+
+/* o detalhe é só o container da conversa escolhida: sem caixa própria, para os blocos de dentro respirarem */
+.detalhe { margin-bottom: var(--e4); }
+.detalhe-topo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1) var(--e2); margin-bottom: var(--e3); }
+.detalhe-topo h3 { margin: 0; font-size: 16px; flex: 1 1 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voltar { font-size: 18px; padding: 0 6px; min-height: 32px; min-width: 32px; }
 .minimizar { font-size: 18px; }
-.conversa { display: grid; gap: 4px; margin: 6px 0 10px; max-height: 240px; overflow-y: auto; }
-.msg { border-radius: 8px; padding: 5px 8px; font-size: 13px; max-width: 92%; }
+
+/* conversa (contexto): discreta, apoia a leitura das sugestões */
+.conversa { display: grid; gap: var(--e1); margin: 0 0 var(--e3); max-height: 220px; overflow-y: auto; }
+.msg { border-radius: var(--raio); padding: 5px 8px; font-size: 13px; max-width: 92%; }
 .msg .quem { display: block; font-size: 11px; color: var(--suave); }
 .msg .txt { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.msg.cliente { background: var(--fundo); justify-self: start; }
+.msg.cliente { background: #fff; border: 1px solid var(--borda); justify-self: start; }
 .msg.atendente { background: var(--marca-clara); justify-self: end; }
-.msg.alvo { outline: 2px solid var(--marca); }
-.rotulo-sugestoes { font-size: 13px; margin: 4px 0; color: var(--marca-escura); }
+.msg.alvo { outline: 2px solid var(--marca); outline-offset: 1px; }
+
+/* sugestões da IA: o foco da tela */
+.rotulo-sugestoes { font-size: 13px; font-weight: 600; margin: var(--e3) 0 6px; color: var(--marca-escura); }
 .ajuda { font-size: 15px; }
 .centro { text-align: center; }
-.selo.aguardando { background: var(--aviso-claro); color: var(--aviso); }
-.risco { margin: 0 0 6px; font-size: 13px; color: var(--erro); font-weight: 600; }
-.alerta-atendente { background: var(--aviso-claro); color: var(--aviso); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.risco { margin: 0 0 var(--e2); font-size: 13px; color: var(--erro); font-weight: 600; }
+.alerta-atendente { background: var(--aviso-claro); color: var(--aviso); border-radius: var(--raio); padding: var(--e2) 10px; font-size: 13px; font-weight: 600; margin-bottom: var(--e3); }
 
-.gerando { display: flex; align-items: center; gap: 8px; color: var(--suave); padding: 10px 0; }
+.gerando { display: flex; align-items: center; gap: var(--e2); color: var(--suave); padding: 10px 0; }
 .gerando::before { content: ""; width: 14px; height: 14px; border: 2px solid var(--borda); border-top-color: var(--marca); border-radius: 50%; animation: gira 1s linear infinite; }
 @keyframes gira { to { transform: rotate(360deg); } }
-.sugestao { border: 1px solid var(--borda); border-radius: 8px; padding: 10px; margin-top: 6px; }
-.sugestao .texto { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 8px; }
+@media (prefers-reduced-motion: reduce) { .gerando::before { animation: none; } }
+.sugestao { border: 1px solid var(--borda); border-radius: var(--raio); padding: 10px; margin-top: 6px; background: #fff; box-shadow: var(--sombra); }
+.sugestao .texto { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: var(--e2); }
 .sugestao .acoes { display: flex; gap: 6px; }
 .sugestao .acoes .primario { flex: 1; padding: 8px 10px; }
 .sugestao .feito { font-size: 12px; color: var(--marca-escura); margin-top: 6px; }
 .nota { font-size: 12px; color: var(--suave); margin-top: 6px; }
-.aviso-caixa { background: var(--aviso-claro); color: var(--aviso); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+.aviso-caixa { background: var(--aviso-claro); color: var(--aviso); border-radius: var(--raio); padding: var(--e2) 10px; margin-top: var(--e2); }
 
-
-.avaliar { border-top: 1px solid var(--borda); margin-top: 10px; padding-top: 8px; }
+/* avaliação das sugestões */
+.avaliar { border-top: 1px solid var(--borda); margin-top: 10px; padding-top: var(--e2); }
 .avaliar-topo { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--suave); }
 .avaliar-topo span { flex: 1; }
 .nota-btn { background: #fff; border: 1px solid var(--borda); min-width: 40px; min-height: 36px; font-size: 16px; }
 .nota-btn.marcada { border-color: var(--marca); background: var(--marca-clara); }
-.avaliar textarea { width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--borda); border-radius: 8px; font: inherit; resize: vertical; }
-.avaliar textarea:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+.avaliar textarea { width: 100%; margin-top: var(--e2); padding: var(--e2) 10px; border: 1px solid var(--borda); border-radius: var(--raio); font: inherit; resize: vertical; }
 .avaliar .largo { margin-top: 6px; }
 
 /* datas mais baratas */
-.precos-abrir { display: block; margin: 12px auto 0; }
-.precos { border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; margin-top: 12px; background: #fff; }
-.form-precos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.precos-abrir { display: block; margin: var(--e3) auto 0; }
+.precos { border: 1px solid var(--borda); border-radius: var(--raio-g); padding: 10px 12px; margin-top: var(--e3); background: #fff; box-shadow: var(--sombra); }
+.form-precos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e2); }
 .campo-preco { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--suave); }
 .campo-preco:first-child, .form-precos .largo { grid-column: 1 / -1; }
 .campo-preco input { font: inherit; font-size: 14px; color: var(--texto); padding: 6px 8px; border: 1px solid var(--borda); border-radius: 6px; min-width: 0; }
 .escolhas, .cotacoes { list-style: none; margin: 6px 0 0; padding: 0; }
-.escolhas li { margin-bottom: 4px; } .escolhas button { width: 100%; text-align: left; }
-.cotacoes li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 4px; border-bottom: 1px solid var(--borda); }
-.cotacoes li.barata { background: #e3f3ec; border-radius: 6px; }
+.escolhas li { margin-bottom: var(--e1); } .escolhas button { width: 100%; text-align: left; }
+.cotacoes li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1) var(--e2); padding: 6px 4px; border-bottom: 1px solid var(--borda); }
+.cotacoes li.barata { background: var(--marca-clara); border-radius: 6px; border-bottom-color: transparent; }
 .cotacoes .data { min-width: 84px; font-weight: 600; } .cotacoes .valor { flex: 1 1 120px; text-align: right; }
 .selo.barata { background: var(--marca); color: #fff; }
 .cotacoes .quarto { flex: 1 1 100%; font-size: 12px; color: var(--suave); }
@@ -112,36 +134,35 @@ input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border
 .sup [data-acao="inserir"], .sup [data-acao="nota"], .sup [data-acao="avaliar"],
 .sup .precos-abrir, .sup [data-acao="precos-abrir"], .sup [data-acao="precos-fechar"],
 .sup [data-acao="precos-buscar"], .sup [data-acao="precos-hotel"] { display: none !important; }
-.sup-botoes { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-#supSelect { width: 100%; min-height: 36px; padding: 6px 8px; }
+.sup-botoes { display: flex; gap: var(--e2); align-items: center; margin-top: var(--e2); }
+#supSelect { width: 100%; min-height: 36px; padding: 6px 8px; border: 1px solid var(--borda); border-radius: var(--raio); }
+.sup-ou { margin: 10px 0 2px; color: var(--suave); font-size: 13px; }
 
-.sup-ou { margin: 10px 0 2px; color: #666; font-size: 13px; }
-
-/* ficha do cliente na extensão (recolhida por padrão) */
-.ex-ficha { border: 1px solid var(--borda, #e3e8e6); border-radius: 8px; margin: 8px 0; background: #fbfdfc; }
-.ex-ficha-vazio { padding: 8px 10px; }
-.ex-ficha-topo { width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 8px 10px; text-align: left; cursor: pointer; }
-.ex-ficha-linha { flex: 1; min-width: 0; color: #555; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ex-ficha-seta { color: var(--marca); font-size: 12px; white-space: nowrap; }
-.ex-ficha-corpo { padding: 0 10px 10px; }
-.ex-cliente { display: flex; flex-direction: column; margin-bottom: 6px; }
-.ex-cliente span { color: #666; font-size: 12px; }
-.ex-numeros { display: flex; gap: 10px; margin-bottom: 6px; }
-.ex-numeros div { flex: 1; background: #fff; border: 1px solid #eee; border-radius: 6px; padding: 6px 8px; }
-.ex-numeros span { display: block; color: #666; font-size: 11px; }
-.ex-secao { font-weight: 600; font-size: 12px; margin: 8px 0 2px; color: #333; }
-.ex-lista { list-style: none; margin: 0; padding: 0; }
-.ex-lista li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
-.ex-reserva { flex-direction: column; }
-
-/* selo de adimplência e ofertas de negociação */
-.status-bloco { margin: 8px 0 4px; }
-.status-cli { display: inline-block; font-weight: 600; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
-.status-cli.adim { background: #e3f3ec; color: #0b6e4f; }
-.status-cli.inad { background: #fde7e7; color: #b42318; }
-.ofertas { border: 1px solid #f2d2cf; background: #fff8f7; border-radius: 8px; padding: 8px 10px; margin: 4px 0 8px; }
-.ofertas-tit { font-weight: 600; font-size: 12px; color: #b42318; margin-bottom: 4px; }
-.oferta { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; padding: 4px 0; border-top: 1px solid #f6e4e2; font-size: 12px; }
+/* selo de adimplência e ofertas de negociação (vermelho só na inadimplência) */
+.status-bloco { margin: var(--e3) 0 var(--e1); }
+.status-cli { display: inline-block; font-weight: 600; font-size: 13px; padding: var(--e1) 10px; border-radius: var(--raio-pill); }
+.status-cli.adim { background: var(--marca-clara); color: var(--marca-escura); }
+.status-cli.inad { background: var(--erro-claro); color: var(--erro); }
+.ofertas { border: 1px solid var(--borda); background: #fff; border-radius: var(--raio); padding: var(--e2) 10px; margin: var(--e1) 0 var(--e2); box-shadow: var(--sombra); }
+.ofertas-tit { font-weight: 600; font-size: 12px; color: var(--erro); margin-bottom: var(--e1); }
+.oferta { display: flex; gap: var(--e2); align-items: flex-start; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--borda); font-size: 12px; }
 .oferta:first-of-type { border-top: 0; }
 .oferta.restrito .oferta-txt { opacity: .7; }
 .oferta-txt { flex: 1; min-width: 0; }
+
+/* ficha do cliente (secundária, recolhida por padrão) */
+.ex-ficha { border: 1px solid var(--borda); border-radius: var(--raio); margin: var(--e3) 0 0; background: var(--fundo); }
+.ex-ficha-vazio { padding: var(--e2) 10px; color: var(--suave); }
+.ex-ficha-topo { width: 100%; display: flex; align-items: center; gap: var(--e2); background: none; border: 0; padding: 10px; text-align: left; cursor: pointer; min-height: 40px; }
+.ex-ficha-linha { flex: 1; min-width: 0; color: var(--suave); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-ficha-seta { color: var(--marca); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.ex-ficha-corpo { padding: 0 10px 10px; }
+.ex-cliente { display: flex; flex-direction: column; margin-bottom: 6px; }
+.ex-cliente span { color: var(--suave); font-size: 12px; }
+.ex-numeros { display: flex; gap: 10px; margin-bottom: 6px; }
+.ex-numeros div { flex: 1; background: #fff; border: 1px solid var(--borda); border-radius: 6px; padding: 6px 8px; }
+.ex-numeros span { display: block; color: var(--suave); font-size: 11px; }
+.ex-secao { font-weight: 600; font-size: 12px; margin: var(--e2) 0 2px; color: var(--texto); }
+.ex-lista { list-style: none; margin: 0; padding: 0; }
+.ex-lista li { display: flex; justify-content: space-between; gap: var(--e2); padding: 3px 0; border-bottom: 1px solid var(--borda); font-size: 12px; }
+.ex-reserva { flex-direction: column; }
