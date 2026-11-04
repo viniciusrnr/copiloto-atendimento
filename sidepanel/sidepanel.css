@@ -133,3 +133,15 @@ input[type=email], input[type=password] { width: 100%; padding: 9px 10px; border
 .ex-lista { list-style: none; margin: 0; padding: 0; }
 .ex-lista li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
 .ex-reserva { flex-direction: column; }
+
+/* selo de adimplência e ofertas de negociação */
+.status-bloco { margin: 8px 0 4px; }
+.status-cli { display: inline-block; font-weight: 600; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.status-cli.adim { background: #e3f3ec; color: #0b6e4f; }
+.status-cli.inad { background: #fde7e7; color: #b42318; }
+.ofertas { border: 1px solid #f2d2cf; background: #fff8f7; border-radius: 8px; padding: 8px 10px; margin: 4px 0 8px; }
+.ofertas-tit { font-weight: 600; font-size: 12px; color: #b42318; margin-bottom: 4px; }
+.oferta { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; padding: 4px 0; border-top: 1px solid #f6e4e2; font-size: 12px; }
+.oferta:first-of-type { border-top: 0; }
+.oferta.restrito .oferta-txt { opacity: .7; }
+.oferta-txt { flex: 1; min-width: 0; }

@@ -471,6 +471,25 @@ function alertaAtual(conversa) {
 const brDataF = (iso) => (iso ? esc(String(iso).slice(0, 10).split("-").reverse().join("/")) : "\u2014");
 const realF = (txt) => (txt == null ? "\u2014" : Number(txt).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 
+// selo verde/vermelho de adimplência e, quando inadimplente, as ofertas de negociação (escada da cobrança)
+function desenharStatusCliente(conversa) {
+  const f = conversa.ficha;
+  if (!f || !f.cliente) return "";
+  const r = f.resumo || {};
+  const atraso = Number(r.parcelas_atraso || 0);
+  const selo = atraso > 0
+    ? `<span class="status-cli inad">\u25cf Cliente inadimplente \u00b7 ${atraso} em atraso \u00b7 ${realF(r.valor_atraso)}</span>`
+    : `<span class="status-cli adim">\u25cf Cliente adimplente</span>`;
+  const ofertas = (atraso > 0 && (conversa.ofertas || []).length)
+    ? `<div class="ofertas"><div class="ofertas-tit">Ofertas de negociação</div>${conversa.ofertas.map((o) => `
+        <div class="oferta${o.pode_oferecer ? "" : " restrito"}">
+          <div class="oferta-txt"><b>${esc(o.titulo)}</b> \u00b7 ${esc(o.texto)}${o.observacao ? ` <span class="pill warn">${esc(o.observacao)}</span>` : ""}</div>
+          <button class="link" data-acao="copiar-oferta" data-texto="${esc(o.texto)}">Copiar</button>
+        </div>`).join("")}</div>`
+    : "";
+  return `<div class="status-bloco">${selo}</div>${ofertas}`;
+}
+
 // ficha do cliente (dados da conta): recolhida mostra um resumo; expandida, títulos, parcelas, boletos e reservas
 function desenharFicha(conversa) {
   const f = conversa.ficha;
@@ -524,6 +543,7 @@ function desenharDetalhe(conversa) {
     : desenharSugestoes(conversa, ultima);
   return `<div class="detalhe">
     <div class="detalhe-topo"><button class="link voltar" data-acao="voltar" aria-label="Voltar para a lista de chats">←</button><h3>${esc(conversa.cliente || "Cliente")}</h3>${conversa.call_id === s.naTela ? '<span class="selo tela">Na tela</span>' : ""}${selos(conversa)}</div>
+    ${desenharStatusCliente(conversa)}
     ${desenharFicha(conversa)}
     ${critico}${desenharConversa(conversa, ultima)}
     ${alerta ? `<div class="alerta-atendente">⚠ ${esc(textoDoAlerta(alerta.alerta))}</div>` : ""}
@@ -627,6 +647,8 @@ async function acao(evento) {
     s.estado = null;
     ultimoHtml = "";
     await abrirSupervisao();
+  } else if (tipo === "copiar-oferta") {
+    if (await copiar(alvo.dataset.texto)) avisar("\u2713 Oferta copiada. Revise e envie no Interact.");
   } else if (tipo === "ficha-toggle") {
     s.fichaAberta = !s.fichaAberta;
     desenhar();
