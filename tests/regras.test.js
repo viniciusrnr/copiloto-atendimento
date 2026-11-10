@@ -112,3 +112,19 @@ test("plano que paga com diárias: mostra as diárias e a mais barata é a que g
   assert.ok(!maisBarataQue({ equivalente: 0, diarias: 5 }, { equivalente: 0, diarias: 5 }));  // empate: não oferece
   assert.ok(!maisBarataQue({ equivalente: 10, diarias: 1 }, { equivalente: 5, diarias: 4 }));
 });
+
+// fixture com ids REAIS da tela do Interact (HTMLs do Vinicius, 06/11/2026): confirma que a leitura do chat ativo bate
+test("chatAtivo resolve o call_id a partir de ids REAIS da Interact", () => {
+  const callId = "e05a03d4-ccb9-11f1-b39a-42010a153802";
+  assert.equal(uuidDoId(`topPanel${callId}`), callId);
+  assert.equal(uuidDoId(`tabChat${callId}`), callId);
+  assert.equal(chatAtivo({
+    itensAtivos: [`topPanel${callId}`],
+    paineisVisiveis: [`tabChat${callId}`, "tabChat99999999-ccb9-11f1-b39a-420000000000"],
+    abasAtivas: [`tabPanel${callId}`, "tabPanelContatos"],
+  }), callId);
+});
+
+test("extrairCpf pega o CPF do bloco de dados associados (formato nome;tipo;CPF)", () => {
+  assert.equal(extrairCpf("DRIESEN SANTOS DUTRA;CPF;529.982.247-25;..."), "52998224725");
+});

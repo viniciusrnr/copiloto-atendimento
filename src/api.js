@@ -36,7 +36,7 @@ async function chamar(metodo, caminho, corpo) {
 
 export async function entrar(email, senha) {
   const dados = await chamar("POST", "/login", { email, senha });
-  await chrome.storage.local.set({ sessao: { token: dados.token, expira_em: dados.expira_em, usuario: dados.usuario } });
+  await chrome.storage.local.set({ sessao: { token: dados.token, expira_em: dados.expira_em, usuario: dados.usuario, features: dados.features || {} } });
   return dados.usuario;
 }
 
@@ -53,7 +53,12 @@ export const verificar = (callId, texto) => chamar("POST", `/verificar/${id(call
 export const hoteis = (termo) => chamar("GET", `/hoteis?${new URLSearchParams({ termo })}`);
 export const precosHotel = (params) => chamar("GET", `/precos-hotel?${new URLSearchParams(params)}`);
 export const informarCpf = (callId, cpf) => chamar("POST", `/cliente/${id(callId)}`, { cpf });
-export const enviarEventos = (eventos) => chamar("POST", "/eventos", { eventos });
+export const enviarEventos = (eventos) => chamar("POST", "/eventos-direto", { eventos });
+
+// caminho stateless (sem o listener): a extensão manda o que leu da tela do Interact
+export const sugerirDireto = (corpo) => chamar("POST", "/sugerir-direto", corpo);
+export const cardapio = (cpf) => chamar("POST", "/cardapio", { cpf });
+export const precosDireto = (corpo) => chamar("POST", "/precos-direto", corpo);
 
 // Modo supervisão: SÓ no ambiente local. Sem login, lê quem está atendendo e acompanha ao vivo (só leitura). As rotas
 // /local/supervisao/* existem apenas no script de teste local do view; em produção não há, por isso o modo não aparece.

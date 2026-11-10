@@ -1,44 +1,25 @@
+// Sidebar STATELESS: o copiloto lê o chat aberto na tela do Interact (content.js) e pede sugestão ao worker por
+// requisição curta (/sugerir-direto). Nada de estado no servidor (sem monitor). O que o atendente vê é sempre o
+// chat que está na tela. Modo contínuo: a cada nova mensagem do cliente, pede sozinho (1 por vez).
 import * as api from "../src/api.js";
 import { enviar, iniciarFila, limparFila, novaSessao, registrar } from "../src/eventos.js";
-import {
-  alertaParaEvento, chatSelecionado, clienteFalouDeNovo, maisBarataQue, respostaDoAtendente, resumo, situacao, textoDaOferta,
-  textoDoAlerta, ultimaDoCliente, usoDaSugestao, valorDoCliente,
-} from "../src/regras.js";
+import { usoDaSugestao } from "../src/regras.js";
 
-const INTERVALO_MS = 3000;
-const IGNORADA_MS = 10 * 60 * 1000;
-const ERRO_REPETIDO_MS = 5 * 60 * 1000; // numa queda, um evento "erro" por código a cada 5 min
 const INTERACT = "https://rdc.digitro.cloud/*";
-
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 const s = {
-  ligado: false, estado: null, escolhido: null, naTela: null, cpfNaTela: null, timer: null, erro: "", aviso: "",
-  cpfsInformados: new Set(),
-  alertasVistos: new Set(), // call_id#seq: um evento por alerta
-  errosRegistrados: new Map(), // código -> quando registrou
-  reativou: false, // presença expirada: volta à escuta uma vez sozinho
-  feito: {},  // sugestao_id -> "Inserida" | "Copiada" (retorno visual)
-  vistas: new Map(), // sugestao_id -> {callId, seq, sugestoes, exibidaEm, usada, fim}
-  avaliacoes: {}, // sugestao_id -> {nota, comentario, enviada}
-  verLista: false, // "← Chats": mostra só a lista até escolher outro chat
-  supervisao: false, // modo supervisão local: sem login, acompanha quem está atendendo (só leitura)
-  fichaAberta: false, // ficha do cliente começa recolhida (uma linha); expande ao clicar
-  // "Cliente achou caro?": o hotel em datas vizinhas no valor do cliente (motor do Reservas), um estado por chat
-  precos: {},  // call_id -> { aberto, form, escolhas, buscando, erro, resultado }
+  ligado: false, features: {}, callId: null, cpf: null, cliente: null,
+  historico: [], sugestoes: null, sugestaoId: null, aviso: null, cenario: null, gerando: false, erro: "",
+  continuo: false, chaveUltimaSug: null, feito: {}, avaliacao: {}, usada: false,
+  cardapio: null, cardapioErro: "", msg: "",
+  precos: { aberto: false, form: { hotel: "", checkin: "", noites: "2", adultos: "2", cafe: false, reembolsavel: false }, buscando: false, erro: "", resultado: null, escolhas: null },
 };
 
-// o painel de preços de um chat (criado na 1ª vez): cada cliente tem a sua consulta, nada vaza de uma conversa para outra
-function precosDoChat(callId) {
-  return (s.precos[callId] ||= { aberto: false, form: { hotel: "", checkin: "", noites: "2", adultos: "2", cafe: false, reembolsavel: false },
-    escolhas: null, buscando: false, erro: "", resultado: null });
-}
-
-// ---------- telas ----------
 function mostrar(tela) {
   for (const id of ["tela-config", "tela-login", "tela-supervisao", "tela-desligado", "tela-ligado"]) $(id).hidden = id !== tela;
-  $("desligar").hidden = !(tela === "tela-ligado" && !s.supervisao);  // supervisão é só leitura: sem desligar
+  $("desligar").hidden = tela !== "tela-ligado";
 }
 
 async function iniciar() {
@@ -46,16 +27,16 @@ async function iniciar() {
   const { urlView, sessao } = await api.config();
   $("usuario").textContent = sessao ? sessao.usuario?.nome || sessao.usuario?.email || "" : "";
   $("sair").hidden = !sessao;
+  $("modo-supervisao").hidden = true;  // supervisão central dependia do monitor: fora do modelo stateless
   if (!urlView) return mostrar("tela-config");
-  $("modo-supervisao").hidden = !api.ehLocal(urlView);
   if (!sessao) return mostrar("tela-login");
+  s.features = sessao.features || {};
   const { ligado } = await chrome.storage.local.get("ligado");
-  if (ligado) return ligar(); // painel reaberto com o copiloto ligado: retoma
+  if (ligado) return ligar();
   mostrar("tela-desligado");
 }
 
 function voltarAoLogin() {
-  pararConsulta();
   s.ligado = false;
   chrome.storage.local.set({ ligado: false });
   $("usuario").textContent = "";
@@ -64,147 +45,24 @@ function voltarAoLogin() {
   mostrar("tela-login");
 }
 
-// ---------- modo supervisão (só local, só leitura) ----------
-async function carregarListaSup() {
-  const sel = $("supSelect");
-  try {
-    const atendentes = (await api.supAtendentes()).atendentes || [];
-    sel.innerHTML = atendentes.length
-      ? atendentes.map((a) => `<option value="${esc(a.login)}" data-nome="${esc(a.nome || "")}">${esc(a.nome || a.login)}${a.estado === "ready_service" ? " · em atendimento" : a.estado ? ` · ${esc(a.estado)}` : ""}</option>`).join("")
-      : '<option value="">Ninguém logado no Interact agora</option>';
-  } catch (erro) {
-    $("erro-supervisao").textContent = erro.message;
-  }
-}
-
-async function abrirSupervisao() {
-  $("erro-supervisao").textContent = "";
-  mostrar("tela-supervisao");
-  await carregarListaSup();
-}
-
-function ligarSupervisao() {
-  s.supervisao = true;
-  s.ligado = true;
-  s.escolhido = null;
-  s.verLista = false;
-  mostrar("tela-ligado");
-  consultar();
-}
-
-async function iniciarSupervisao() {
-  const sel = $("supSelect");
-  if (!sel.value) return;
-  $("erro-supervisao").textContent = "";
-  $("supAcompanhar").disabled = true;
-  try {
-    await api.supAcompanhar(sel.value, sel.selectedOptions[0]?.dataset.nome || "");
-    ligarSupervisao();
-  } catch (erro) {
-    $("erro-supervisao").textContent = erro.message;
-  } finally {
-    $("supAcompanhar").disabled = false;
-  }
-}
-
-async function iniciarSupervisaoAuto() {
-  $("erro-supervisao").textContent = "";
-  const botao = $("supAuto");
-  const texto = botao.textContent;
-  botao.disabled = true;
-  botao.textContent = "Procurando quem está em atendimento…";
-  try {
-    const est = await api.supAuto();
-    if (est._auto === "nenhum") {
-      $("erro-supervisao").textContent = `Ninguém em atendimento agora (olhei ${est._tentados || 0}). Tente de novo em instantes.`;
-      return;
-    }
-    s.estado = est;
-    ligarSupervisao();
-  } catch (erro) {
-    $("erro-supervisao").textContent = erro.message;
-  } finally {
-    botao.disabled = false;
-    botao.textContent = texto;
-  }
-}
-
-async function tratar(erro, onde) {
-  if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
-  const codigo = erro.status ? `http_${erro.status}` : onde;
-  if (Date.now() - (s.errosRegistrados.get(codigo) || 0) > ERRO_REPETIDO_MS) {
-    s.errosRegistrados.set(codigo, Date.now());
-    registrar("erro", { dados: { codigo } });
-  }
-  s.erro = erro.message;
-  desenhar();
-}
-
 // ---------- ligar / desligar ----------
 async function ligar() {
-  $("erro-ligar").textContent = "";
-  $("ligar").disabled = true;
-  try {
-    s.estado = await api.ativar();
-  } catch (erro) {
-    $("ligar").disabled = false;
-    if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
-    $("erro-ligar").textContent = erro.message;
-    return mostrar("tela-desligado");
-  }
-  $("ligar").disabled = false;
   s.ligado = true;
   novaSessao();
   registrar("ativou");
   chrome.storage.local.set({ ligado: true });
   mostrar("tela-ligado");
   await perguntarTela();
-  consultar();
+  desenhar();
 }
 
 async function desligar() {
-  pararConsulta();
-  encerrarVistas(null, "trocou_conversa");
-  registrar("desativou", { dados: { motivo: "botao" } });
   s.ligado = false;
+  s.continuo = false;
+  registrar("desativou", { dados: { motivo: "botao" } });
   chrome.storage.local.set({ ligado: false });
   mostrar("tela-desligado");
-  try { await api.desativar(); } catch { /* o servidor tira o atendente sozinho em 2 min */ }
   enviar();
-}
-
-function pararConsulta() {
-  clearTimeout(s.timer);
-  s.timer = null;
-}
-
-async function consultar() {
-  pararConsulta();
-  if (!s.ligado) return;
-  try {
-    if (s.supervisao) {
-      s.estado = await api.supEstado();
-      s.erro = "";
-      desenhar();  // só leitura: não registra uso, alertas nem CPF
-    } else {
-      s.estado = await api.estado();
-      s.erro = "";
-      // presença expirada (notebook dormiu, rede caiu): volta à escuta uma vez. Sem licença, só pelo botão.
-      if (s.estado.ativo === false && s.estado.status !== "sem_licenca" && !s.reativou) {
-        s.reativou = true;
-        s.estado = await api.ativar();
-      } else if (s.estado.ativo !== false) {
-        s.reativou = false;
-      }
-      acompanharUso();
-      registrarAlertas();
-      informarCpf();
-      desenhar();
-    }
-  } catch (erro) {
-    await tratar(erro, "estado");
-  }
-  if (s.ligado) s.timer = setTimeout(consultar, INTERVALO_MS);
 }
 
 // ---------- tela do Interact ----------
@@ -213,226 +71,107 @@ async function abaDoInteract() {
   return ativa || (await chrome.tabs.query({ url: INTERACT }))[0] || null;
 }
 
-async function perguntarTela() {
+async function pedir(mensagem) {
   const aba = await abaDoInteract();
-  if (!aba) return;
-  try {
-    aoMudarTela(await chrome.tabs.sendMessage(aba.id, { tipo: "tela?" }));
-  } catch { /* Interact aberto antes da extensão: atualizar a página resolve */ }
+  if (!aba) return null;
+  try { return await chrome.tabs.sendMessage(aba.id, mensagem); } catch { return null; }
 }
 
-function aoMudarTela(tela) {
-  if (!tela) return;
-  if (tela.callId !== s.naTela) {
-    s.naTela = tela.callId;
-    s.escolhido = null; // trocou de chat no Interact: o painel acompanha
-    s.verLista = false;
+async function perguntarTela() {
+  aoMudarTela(await pedir({ tipo: "tela?" }));
+}
+
+async function aoMudarTela(tela) {
+  if (!s.ligado) return;
+  const callId = tela?.callId || null;
+  if (callId !== s.callId) {  // trocou de chat na tela: zera o que era do chat anterior
+    s.callId = callId;
+    s.sugestoes = null; s.sugestaoId = null; s.aviso = null; s.cenario = null;
+    s.cardapio = null; s.cardapioErro = ""; s.chaveUltimaSug = null; s.usada = false;
   }
-  s.cpfNaTela = tela.callId && tela.cpf ? { callId: tela.callId, cpf: tela.cpf } : null;
-  informarCpf();
+  s.cpf = tela?.cpf || null;
+  s.historico = callId ? (await pedir({ tipo: "historico?", callId })) || [] : [];
+  // acompanha o uso: atendente respondeu depois da sugestão?
+  registrarEnvioSeRespondeu();
+  // modo contínuo: nova mensagem do cliente desde a última sugestão → pede sozinho
+  if (s.continuo && s.features.suggest && !s.gerando && callId) {
+    const ultima = [...s.historico].reverse().find((m) => m.direcao === "in");
+    const chave = ultima ? `${ultima.id || ""}#${ultima.texto}` : null;
+    if (chave && chave !== s.chaveUltimaSug) sugerir(true);
+  }
   desenhar();
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.tipo === "tela") aoMudarTela(msg);
-  else if (msg.tipo === "evento") registrar(msg.evento, { callId: msg.callId, dados: msg.dados }); // trava do Enviar
+  else if (msg.tipo === "evento") registrar(msg.evento, { callId: msg.callId, dados: msg.dados });  // trava do Enviar
 });
 
-// o histórico que está na tela do Interact: a IA vê também o que veio antes do play
-async function historicoDaTela(callId) {
-  const aba = await abaDoInteract();
-  try {
-    return aba ? await chrome.tabs.sendMessage(aba.id, { tipo: "historico?", callId }) : null;
-  } catch {
-    return null; // sem content script na aba: gera só com o que veio pela API
-  }
-}
-
-async function informarCpf() {
-  const alvo = s.cpfNaTela;
-  if (!s.ligado || !alvo || s.cpfsInformados.has(alvo.callId)) return;
-  if (!(s.estado?.conversas || []).some((c) => c.call_id === alvo.callId)) return; // o chat ainda não chegou pela API
-  s.cpfsInformados.add(alvo.callId);
-  try {
-    await api.informarCpf(alvo.callId, alvo.cpf);
-  } catch (erro) {
-    if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
-    if (!erro.status) s.cpfsInformados.delete(alvo.callId); // rede: tenta na próxima
-  }
-}
-
-// ---------- uso das sugestões (eventos) ----------
-function conversaAtual() {
-  if (s.verLista) return null;
-  const conversas = s.estado?.conversas || [];
-  const id = chatSelecionado(conversas, { escolhido: s.escolhido, naTela: s.naTela });
-  return conversas.find((c) => c.call_id === id) || null;
-}
-
-function encerrarVistas(callIdQueFica, motivo) {
-  for (const [id, v] of s.vistas) {
-    if (v.fim || v.callId === callIdQueFica) continue;
-    v.fim = true;
-    if (!v.usada) registrar("ignorou", { callId: v.callId, sugestaoId: id, dados: { motivo } });
-  }
-}
-
-function acompanharUso() {
-  const atual = conversaAtual();
-  const ultima = ultimaDoCliente(atual);
-  if (ultima?.sugestao_id && ultima.sugestoes?.length && !s.vistas.has(ultima.sugestao_id)) {
-    s.vistas.set(ultima.sugestao_id, { callId: atual.call_id, seq: ultima.seq, sugestoes: ultima.sugestoes, exibidaEm: Date.now() });
-    registrar("exibiu", { callId: atual.call_id, sugestaoId: ultima.sugestao_id, dados: { sugestoes: ultima.sugestoes.length } });
-  }
-  const porId = new Map((s.estado?.conversas || []).map((c) => [c.call_id, c]));
-  for (const [id, v] of s.vistas) {
-    if (v.fim) continue;
-    const conversa = porId.get(v.callId);
-    const resposta = respostaDoAtendente(conversa, v.seq);
-    if (resposta) {
-      const uso = usoDaSugestao(v.sugestoes, resposta.texto);
-      registrar("enviou", { callId: v.callId, sugestaoId: id,
-        dados: { ...uso, segundos_ate_enviar: Math.round((Date.now() - v.exibidaEm) / 1000) } });
-      v.fim = true;
-    } else if (!conversa || clienteFalouDeNovo(conversa, v.seq) || Date.now() - v.exibidaEm > IGNORADA_MS) {
-      v.fim = true;
-      if (!v.usada) registrar("ignorou", { callId: v.callId, sugestaoId: id,
-        dados: { motivo: conversa && clienteFalouDeNovo(conversa, v.seq) ? "nova_mensagem" : "tempo" } });
-    }
-  }
-}
-
-// ---------- desenho ----------
-function hora(valor) {
-  const m = String(valor ?? "").match(/(\d{2}):(\d{2})/);
-  if (m) return m[0];
-  const d = typeof valor === "number" ? new Date(valor < 1e12 ? valor * 1000 : valor) : null;
-  return d && !isNaN(d) ? d.toTimeString().slice(0, 5) : "";
-}
-
-function cenarioDe(conversa) {
-  return [...(conversa.mensagens || [])].reverse().find((m) => m.papel === "cliente" && m.cenario)?.cenario || null;
-}
-
-function selos(conversa) {
-  const cenario = cenarioDe(conversa);
-  if (!cenario) return "";
-  const nome = cenario.cenario === "bravo" ? "Cliente bravo" : "Comparando preço";
-  return `<span class="selo ${esc(cenario.cenario)}">${nome}</span>${cenario.critico ? '<span class="selo critico">Crítico</span>' : ""}`;
-}
-
-function desenharChats(conversas, selecionado) {
-  const outros = conversas.filter((c) => c.call_id !== selecionado && !c.encerrada);
-  if (!outros.length) return "";
-  return `<h2 class="rotulo">${selecionado ? "Outros chats" : "Seus chats: escolha em qual quer ajuda"}</h2><ul class="chats">${outros.map((c) => {
-    const ultima = (c.mensagens || []).filter((m) => m.papel !== "sistema").at(-1);
-    const aguardando = ultima?.papel === "cliente" ? '<span class="selo aguardando">Aguardando você</span>' : "";
-    return `<li><button class="chat" data-acao="escolher" data-chat="${esc(c.call_id)}">
-      <span class="linha"><span class="nome">${esc(c.cliente || "Cliente")}</span>${c.call_id === s.naTela ? '<span class="selo tela">Na tela</span>' : ""}${aguardando}${selos(c)}<span class="hora">${esc(hora(ultima?.hora))}</span></span>
-      <span class="ultima">${esc(ultima ? `${ultima.papel === "atendente" ? "Você: " : ""}${resumo(ultima.texto)}` : "Nenhuma mensagem desde que você ligou")}</span></button></li>`;
-  }).join("")}</ul>`;
-}
-
-// a ajuda é sempre para a última mensagem do cliente, destacada na conversa: o atendente vê para qual momento é
-function desenharSugestoes(conversa, ultima) {
-  const quando = hora(ultima.hora) ? ` das ${hora(ultima.hora)}` : "";
-  if (ultima.sugerindo) return `<div class="gerando">Gerando 2 respostas para a mensagem${esc(quando)}… (até 20 s)</div>`;
-  const sugestoes = ultima.sugestoes || [];
-  if (!sugestoes.length) {
-    const motivo = ultima.aviso
-      ? '<div class="aviso-caixa">Você está cotando, então a IA fica em pausa. Quando tiver os valores, peça de novo.</div>'
-      : ultima.baixa_confianca ? '<p class="nota">A IA não teve confiança suficiente para sugerir aqui. Responda do seu jeito ou tente de novo.</p>'
-      : ultima.sugestao_id ? '<p class="nota">A IA não conseguiu sugerir agora. Tente de novo.</p>' : "";
-    return `${motivo}<button class="primario largo ajuda" data-acao="gerar">✨ Quero ajuda do copiloto</button>
-      <p class="nota centro">Gera 2 respostas para a mensagem${esc(quando)} do cliente, destacada acima.</p>`;
-  }
-  // inserir só no chat que está aberto no Interact: nunca no chat de outro cliente
-  const naTela = conversa.call_id === s.naTela;
-  const respondida = respostaDoAtendente(conversa, ultima.seq)
-    ? '<p class="aviso-caixa">Você já respondeu depois desta mensagem. Se o cliente escrever de novo, peça novas sugestões.</p>' : "";
-  return `<h4 class="rotulo-sugestoes">Respostas para a mensagem${esc(quando)}</h4>${respondida}` + sugestoes.map((sug, i) => {
-    const feito = s.feito[`${ultima.sugestao_id}#${i}`];
-    const inserir = naTela ? `<button class="primario" data-acao="inserir" data-indice="${i}">Inserir na resposta</button>`
-      : '<button class="primario" disabled title="A sugestão só entra no chat aberto no Interact">Abra este chat no Interact</button>';
-    return `<div class="sugestao"><div class="texto">${esc(sug.texto)}</div>
-    <div class="acoes">${inserir}<button class="secundario" data-acao="copiar" data-indice="${i}">Copiar</button></div>
-    ${feito ? `<div class="feito">${esc(feito)}</div>` : ""}</div>`;
-  }).join("") + '<p class="nota">Inserir só escreve no fim da caixa. Não envia nem apaga.</p>'
-    + desenharAvaliacao(ultima.sugestao_id) + '<button class="link" data-acao="gerar">↻ Gerar outras sugestões</button>';
-}
-
-const reais = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const diaSemana = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
-
-function desenharPrecos(callId) {
-  const p = precosDoChat(callId);
-  if (!p.aberto) return '<button class="link precos-abrir" data-acao="precos-abrir">💰 Cliente achou caro? Ver datas mais baratas</button>';
-  const campo = (nome, rotulo, tipo, extra = "") =>
-    `<label class="campo-preco"><span>${rotulo}</span><input type="${tipo}" data-campo="preco-${nome}" ${extra}></label>`;
-  const escolhas = p.escolhas ? `<p class="nota">Qual destes?</p><ul class="escolhas">${p.escolhas.map((h) =>
-    `<li><button class="secundario" data-acao="precos-hotel" data-id="${h.id}">${esc(h.nome)} <span class="nota">#${h.id}</span></button></li>`).join("")}</ul>` : "";
-  const r = p.resultado;
-  const pedida = r?.cotacoes.find((c) => c.checkin === r.pedida);  // "Copiar oferta" só em data mais barata que a pedida
-  const linhas = r ? r.cotacoes.map((c) => {
-    const selo = (c.checkin === r.mais_barata ? '<span class="selo barata">Mais barata</span>' : "")
-      + (c.checkin === r.pedida ? '<span class="selo">Pedida</span>' : "");
-    return `<li class="${c.checkin === r.mais_barata ? "barata" : ""}"><span class="data">${esc(diaSemana(c.checkin))}</span>${selo}
-      <span class="valor">${c.disponivel ? esc(valorDoCliente(c))
-        : c.erro ? "não consegui consultar" : c.filtro === "sem_quarto" ? "sem quarto com esse filtro"
-        : c.filtro === "valor_no_site" ? "tem quarto, valor só no site" : "não confirmado: veja no site"}</span>
-      ${c.quartos?.length ? `<span class="quarto">${esc(c.quartos[0].quarto)} · ${esc(c.quartos[0].regime)} · ${c.quartos[0].reembolsavel ? "cancelamento grátis" : "não reembolsável"}${c.quartos.length > 1 ? ` <span class="nota">(+${c.quartos.length - 1} tipo${c.quartos.length > 2 ? "s" : ""})</span>` : ""}</span>` : ""}
-      ${c.disponivel && c.checkin !== r.pedida && !(pedida?.disponivel && !maisBarataQue(c, pedida)) ? `<button class="link" data-acao="precos-copiar" data-checkin="${c.checkin}">Copiar oferta</button>` : ""}</li>`;
-  }).join("") : "";
-  const barata = r?.cotacoes.find((c) => c.checkin === r.mais_barata);
-  const resumoTexto = !r ? "" : !barata ? '<p class="aviso-caixa">Nenhuma data confirmada nesses dias. Pode ser falta de quarto ou o fornecedor fora do ar: confira no site antes de dizer ao cliente que não há vaga.</p>'
-    : r.mais_barata === r.pedida ? '<p class="aviso-caixa">A data pedida já é a mais barata desses dias.</p>'
-    : r.economia ? `<p class="aviso-caixa">Entrando em ${esc(diaSemana(r.mais_barata))} o cliente economiza o equivalente a ${esc(reais(r.economia))}.</p>`
-    : r.diarias_a_menos > 0 ? `<p class="aviso-caixa">Entrando em ${esc(diaSemana(r.mais_barata))} o cliente usa ${r.diarias_a_menos} ${r.diarias_a_menos === 1 ? "diária" : "diárias"} a menos do plano.</p>` : "";
-  const quartos = barata?.quartos?.length > 1 ? `<p class="nota">Outros quartos na mais barata: ${esc(barata.quartos.slice(1).map((q) => `${q.quarto} (${q.regime})`).join(", "))}</p>` : "";
-  return `<div class="precos">
-    <div class="detalhe-topo"><h3>💰 Datas mais baratas</h3><button class="link" data-acao="precos-fechar" aria-label="Fechar">✕</button></div>
-    <div class="form-precos">${campo("hotel", "Hotel (nome ou ID)", "text", 'placeholder="ex.: Águas de Palmas ou 3525"')}
-      ${campo("checkin", "Check-in", "date")}${campo("noites", "Noites", "number", 'min="1" max="14"')}${campo("adultos", "Adultos", "number", 'min="1" max="6"')}
-      <label class="filtro-preco"><input type="checkbox" data-campo="preco-cafe"> Com café da manhã</label>
-      <label class="filtro-preco"><input type="checkbox" data-campo="preco-reembolsavel"> Cancelamento grátis</label>
-      <button class="primario largo" data-acao="precos-buscar" ${p.buscando ? "disabled" : ""}>${p.buscando ? "Consultando 7 datas…" : "Buscar"}</button></div>
-    ${p.erro ? `<p class="aviso-caixa">${esc(p.erro)}</p>` : ""}${escolhas}
-    ${r ? `<h4 class="rotulo-sugestoes">${esc(r.hotel || `Hotel #${r.id_hotel}`)}</h4><ul class="cotacoes">${linhas}</ul>${resumoTexto}${quartos}
-      <p class="nota">${r.plano === "cliente" ? `Valores no plano de <b>${esc(r.cliente || "cliente do chat")}</b> (cliente da ficha).`
-        : "Demonstração: valores do plano da conta configurada no copiloto, não do cliente do chat."} "Não confirmado" pode ser falta de quarto ou o fornecedor fora do ar. O prazo do cancelamento grátis está no detalhe do hotel, no site.</p>` : ""}
-  </div>`;
-}
-
-async function buscarPrecos(idHotel) {
-  const atual = conversaAtual();
-  if (!atual) return;  // preços só dentro de um chat
-  const p = precosDoChat(atual.call_id);
-  if (p.buscando) return;  // Enter durante a consulta
-  const termo = p.form.hotel.trim();
-  p.erro = "";
-  p.escolhas = null;
-  if (!idHotel && !/^\d+$/.test(termo)) {
-    if (termo.length < 3) { p.erro = "Digite o nome (3 letras ou mais) ou o ID do hotel."; return desenhar(); }
-    try {
-      const { hoteis } = await api.hoteis(termo);
-      if (hoteis.length !== 1) {
-        p.erro = hoteis.length ? "" : "Nenhum hotel com esse nome.";
-        p.escolhas = hoteis.length ? hoteis : null;
-        return desenhar();
-      }
-      idHotel = hoteis[0].id;
-    } catch (erro) {
-      if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
-      p.erro = erro.message;
-      return desenhar();
-    }
-  }
-  if (!p.form.checkin) { p.erro = "Informe o check-in."; return desenhar(); }
-  p.buscando = true;
+// ---------- sugestão ----------
+async function sugerir(automatico = false) {
+  if (!s.callId || s.gerando || !s.features.suggest) return;
+  const ultima = [...s.historico].reverse().find((m) => m.direcao === "in");
+  if (!ultima) { s.msg = "Sem mensagem do cliente na tela para sugerir."; return desenhar(); }
+  s.chaveUltimaSug = `${ultima.id || ""}#${ultima.texto}`;
+  s.gerando = true; s.erro = ""; s.usada = false;
+  registrar("pediu_sugestao", { callId: s.callId, dados: { gatilho: automatico ? "automatico" : "botao" } });
   desenhar();
   try {
-    p.resultado = await api.precosHotel({ hotel: idHotel || termo, checkin: p.form.checkin, noites: p.form.noites, adultos: p.form.adultos,
-      cafe: p.form.cafe ? 1 : 0, reembolsavel: p.form.reembolsavel ? 1 : 0, call: atual.call_id });
+    const d = await api.sugerirDireto({ call_id: s.callId, historico: s.historico, cpf: s.cpf || undefined, automatico });
+    s.sugestoes = d.sugestoes || [];
+    s.sugestaoId = d.sugestao_id || null;
+    s.aviso = d.aviso || null;
+    s.cenario = d.cenario || null;
+    s.feito = {}; s.avaliacao = {};
+    if (s.sugestaoId && s.sugestoes.length) registrar("exibiu", { callId: s.callId, sugestaoId: s.sugestaoId, dados: { sugestoes: s.sugestoes.length } });
+  } catch (erro) {
+    if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
+    s.erro = erro.message;
+  } finally {
+    s.gerando = false;
+  }
+  desenhar();
+}
+
+function registrarEnvioSeRespondeu() {
+  if (!s.sugestaoId || s.usada) return;
+  const ultima = s.historico[s.historico.length - 1];
+  if (ultima && ultima.direcao === "out") {  // atendente mandou algo depois da sugestão
+    const uso = usoDaSugestao((s.sugestoes || []).map((x) => x.texto ? x : { texto: x.texto }), ultima.texto);
+    registrar("enviou", { callId: s.callId, sugestaoId: s.sugestaoId, dados: uso });
+    s.usada = true;
+  }
+}
+
+// ---------- cardápio (inadimplente) ----------
+async function carregarCardapio() {
+  if (!s.cpf || !s.features.rules) return;
+  s.cardapioErro = ""; s.cardapio = null; desenhar();
+  try {
+    s.cardapio = await api.cardapio(s.cpf);
+  } catch (erro) {
+    if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
+    s.cardapioErro = erro.message;
+  }
+  desenhar();
+}
+
+// ---------- preços ----------
+async function buscarPrecos(idHotel) {
+  const p = s.precos;
+  if (p.buscando) return;
+  p.erro = ""; p.escolhas = null;
+  const termo = p.form.hotel.trim();
+  if (!idHotel && !/^\d+$/.test(termo)) {
+    if (termo.length < 3) { p.erro = "Digite o nome (3+ letras) ou o ID do hotel."; return desenhar(); }
+    // sem o endpoint de busca por nome no stateless: peça o ID (o nome exige o motor do Reservas)
+    p.erro = "Informe o ID do hotel (número)."; return desenhar();
+  }
+  if (!p.form.checkin) { p.erro = "Informe o check-in."; return desenhar(); }
+  p.buscando = true; desenhar();
+  try {
+    p.resultado = await api.precosDireto({ hotel: idHotel || termo, checkin: p.form.checkin, noites: Number(p.form.noites),
+      adultos: Number(p.form.adultos), cpf: s.cpf || undefined, cafe: p.form.cafe, reembolsavel: p.form.reembolsavel });
   } catch (erro) {
     if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
     p.erro = erro.message;
@@ -442,314 +181,182 @@ async function buscarPrecos(idHotel) {
   desenhar();
 }
 
-// as últimas mensagens desde o play; a que a ajuda responde fica destacada
-function desenharConversa(conversa, ultima) {
-  const msgs = (conversa.mensagens || []).filter((m) => m.papel !== "sistema").slice(-6);
-  if (!msgs.length) return '<p class="nota">As mensagens aparecem a partir de agora: o copiloto não vê o que foi conversado antes de ser ligado.</p>';
-  return `<div class="conversa">${msgs.map((m) => `<div class="msg ${m.papel}${m === ultima || m.seq === ultima?.seq ? " alvo" : ""}">
-    <span class="quem">${m.papel === "cliente" ? esc(conversa.cliente || "Cliente") : "Você"} ${esc(hora(m.hora))}</span>
-    <div class="txt">${esc(m.texto)}</div></div>`).join("")}</div>`;
+// ---------- desenho ----------
+function renderSugestoes() {
+  if (s.gerando) return '<div class="gerando">Gerando sugestões… (até 20 s)</div>';
+  if (s.aviso) return '<div class="aviso-caixa">Você está cotando, então a IA fica em pausa. Quando tiver os valores, peça de novo.</div>'
+    + '<button class="primario largo ajuda" data-acao="gerar">✨ Quero ajuda do copiloto</button>';
+  if (!s.sugestoes) return `<button class="primario largo ajuda" data-acao="gerar">✨ Quero ajuda do copiloto</button>
+    <p class="nota centro">Gera respostas para a última mensagem do cliente no chat aberto.</p>`;
+  if (!s.sugestoes.length) return `<p class="nota">A IA não sugeriu aqui (sem confiança ou fora de gatilho). Tente de novo ou responda do seu jeito.</p>
+    <button class="link" data-acao="gerar">↻ Tentar de novo</button>`;
+  return '<h4 class="rotulo-sugestoes">Sugestões para a última mensagem do cliente</h4>' + s.sugestoes.map((sug, i) => {
+    const feito = s.feito[i];
+    return `<div class="sugestao"><div class="texto">${esc(sug.texto)}</div>
+      <div class="acoes"><button class="primario" data-acao="inserir" data-indice="${i}">Inserir na resposta</button>
+      <button class="secundario" data-acao="copiar" data-indice="${i}">Copiar</button></div>
+      ${feito ? `<div class="feito">${esc(feito)}</div>` : ""}</div>`;
+  }).join("") + '<p class="nota">Inserir só escreve no fim da caixa. Não envia nem apaga.</p>'
+    + renderAvaliacao() + '<button class="link" data-acao="gerar">↻ Gerar outras</button>';
 }
 
-// 👍/👎 e comentário livre do atendente sobre as sugestões; o texto do campo é posto depois do desenho (desenhar)
-function desenharAvaliacao(sugestaoId) {
-  const a = s.avaliacoes[sugestaoId] || {};
+function renderAvaliacao() {
+  if (!s.sugestaoId) return "";
+  const a = s.avaliacao;
   if (a.enviada) return '<div class="avaliar"><span class="feito">✓ Avaliação registrada. Obrigado!</span></div>';
-  const botao = (nota, icone, rotulo) => `<button class="nota-btn${a.nota === nota ? " marcada" : ""}" data-acao="nota"
-    data-nota="${nota}" aria-pressed="${a.nota === nota}" aria-label="${rotulo}" title="${rotulo}">${icone}</button>`;
+  const botao = (nota, icone, rotulo) => `<button class="nota-btn${a.nota === nota ? " marcada" : ""}" data-acao="nota" data-nota="${nota}" aria-label="${rotulo}" title="${rotulo}">${icone}</button>`;
   return `<div class="avaliar"><div class="avaliar-topo"><span>Essas sugestões ajudaram?</span>${botao("positivo", "👍", "Ajudaram")}${botao("negativo", "👎", "Não ajudaram")}</div>
-    ${a.nota ? `<textarea data-campo="comentario" data-sugestao="${esc(sugestaoId)}" maxlength="500" rows="2" aria-label="Comentário"
-      placeholder="${a.nota === "negativo" ? "O que estava errado ou faltou?" : "Comentário"} (opcional, sem CPF ou dados do cliente)"></textarea>
+    ${a.nota ? `<textarea data-campo="comentario" maxlength="500" rows="2" placeholder="Comentário (opcional, sem dados do cliente)"></textarea>
       <button class="primario largo" data-acao="avaliar">Enviar avaliação</button>` : ""}</div>`;
 }
 
-function alertaAtual(conversa) {
-  const ultima = (conversa.mensagens || []).filter((m) => m.papel === "atendente").at(-1);
-  return ultima?.alertas?.length ? { mensagem: ultima, alerta: ultima.alertas[0] } : null;
+function renderCardapio() {
+  if (!s.features.rules || !s.cpf) return "";
+  if (!s.cardapio) return `<button class="link" data-acao="cardapio">📋 Cliente inadimplente? Ver regras/ofertas</button>${s.cardapioErro ? `<p class="aviso-caixa">${esc(s.cardapioErro)}</p>` : ""}`;
+  const ofertas = (s.cardapio.cardapio || []).map((o) => `<div class="oferta"><div class="oferta-txt"><b>${esc(o.titulo || o.id || "Oferta")}</b> · ${esc(o.texto || "")}</div>
+    <button class="link" data-acao="copiar-texto" data-texto="${esc(o.texto || "")}">Copiar</button></div>`).join("");
+  const regras = (s.cardapio.regras || []).map((r) => `<li>${esc(r.regra)} <button class="link" data-acao="copiar-texto" data-texto="${esc(r.regra)}">Copiar</button></li>`).join("");
+  return `<div class="ofertas"><div class="ofertas-tit">${s.cardapio.inadimplente ? "Cliente inadimplente · ofertas" : "Regras disponíveis"}</div>
+    ${ofertas || ""}${regras ? `<ul class="ex-lista">${regras}</ul>` : ""}
+    <button class="link" data-acao="cardapio-fechar">Fechar</button></div>`;
 }
 
-const brDataF = (iso) => (iso ? esc(String(iso).slice(0, 10).split("-").reverse().join("/")) : "\u2014");
-const realF = (txt) => (txt == null ? "\u2014" : Number(txt).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
-
-// selo verde/vermelho de adimplência e, quando inadimplente, as ofertas de negociação (escada da cobrança)
-function desenharStatusCliente(conversa) {
-  const f = conversa.ficha;
-  if (!f || !f.cliente) return "";
-  const r = f.resumo || {};
-  const atraso = Number(r.parcelas_atraso || 0);
-  const selo = atraso > 0
-    ? `<span class="status-cli inad">\u25cf Cliente inadimplente \u00b7 ${atraso} em atraso \u00b7 ${realF(r.valor_atraso)}</span>`
-    : `<span class="status-cli adim">\u25cf Cliente adimplente</span>`;
-  const ofertas = (atraso > 0 && (conversa.ofertas || []).length)
-    ? `<div class="ofertas"><div class="ofertas-tit">Ofertas de negociação</div>${conversa.ofertas.map((o) => `
-        <div class="oferta${o.pode_oferecer ? "" : " restrito"}">
-          <div class="oferta-txt"><b>${esc(o.titulo)}</b> \u00b7 ${esc(o.texto)}${o.observacao ? ` <span class="pill warn">${esc(o.observacao)}</span>` : ""}</div>
-          <button class="link" data-acao="copiar-oferta" data-texto="${esc(o.texto)}">Copiar</button>
-        </div>`).join("")}</div>`
-    : "";
-  return `<div class="status-bloco">${selo}</div>${ofertas}`;
+function renderPrecos() {
+  if (!s.features.prices) return "";
+  const p = s.precos;
+  if (!p.aberto) return '<button class="link precos-abrir" data-acao="precos-abrir">💰 Datas mais baratas do hotel</button>';
+  const r = p.resultado;
+  const linhas = r && r.cotacoes ? r.cotacoes.map((c) => `<li>${esc(c.checkin)} — ${c.disponivel ? esc(valorTexto(c)) : "não confirmado"}${c.checkin === r.mais_barata ? ' <span class="selo barata">mais barata</span>' : ""}</li>`).join("") : "";
+  return `<div class="precos"><div class="detalhe-topo"><h3>💰 Datas mais baratas</h3><button class="link" data-acao="precos-fechar">✕</button></div>
+    <label class="campo-preco"><span>Hotel (ID)</span><input type="text" data-campo="preco-hotel" placeholder="ex.: 93933"></label>
+    <label class="campo-preco"><span>Check-in</span><input type="date" data-campo="preco-checkin"></label>
+    <label class="campo-preco"><span>Noites</span><input type="number" min="1" max="14" data-campo="preco-noites"></label>
+    <label class="campo-preco"><span>Adultos</span><input type="number" min="1" max="6" data-campo="preco-adultos"></label>
+    <button class="primario largo" data-acao="precos-buscar" ${p.buscando ? "disabled" : ""}>${p.buscando ? "Consultando…" : "Buscar"}</button>
+    ${p.erro ? `<p class="aviso-caixa">${esc(p.erro)}</p>` : ""}
+    ${r && r.disponivel === false ? `<p class="aviso-caixa">${esc(r.aviso || "Preço no plano do cliente indisponível.")}</p>` : ""}
+    ${linhas ? `<ul class="cotacoes">${linhas}</ul>` : ""}</div>`;
 }
 
-// ficha do cliente (dados da conta): recolhida mostra um resumo; expandida, títulos, parcelas, boletos e reservas
-function desenharFicha(conversa) {
-  const f = conversa.ficha;
-  if (!f || !f.cliente) {
-    const msg = conversa.cliente_identificado === false
-      ? "Cliente não identificado: o Interact não mandou CPF nem código."
-      : "A ficha aparece quando o cliente é identificado (CPF ou código).";
-    return `<div class="ex-ficha"><div class="ex-ficha-vazio"><b>Ficha do cliente</b> <span class="nota">${msg}</span></div></div>`;
-  }
-  const c = f.cliente, r = f.resumo || {};
-  const atrasadas = (f.parcelas || []).filter((x) => x.status === 3);
-  const proxima = (f.reservas || []).filter((x) => x.status !== "CANCELADA" && x.entrada).sort((a, b) => a.entrada.localeCompare(b.entrada))[0];
-  const resumo = [c.nome, r.parcelas_atraso ? `${r.parcelas_atraso} em atraso (${realF(r.valor_atraso)})` : "sem atraso",
-    proxima ? `reserva ${proxima.hotel} ${brDataF(proxima.entrada)}` : ""].filter(Boolean).join(" \u00b7 ");
-  const lista = (itens, vazio, linha) => ((itens && itens.length) ? `<ul class="ex-lista">${itens.map(linha).join("")}</ul>` : `<div class="nota">${vazio}</div>`);
-  return `<div class="ex-ficha">
-    <button class="ex-ficha-topo" data-acao="ficha-toggle" aria-expanded="${s.fichaAberta}">
-      <b>Ficha do cliente</b><span class="ex-ficha-linha">${esc(resumo)}</span>
-      <span class="ex-ficha-seta">${s.fichaAberta ? "Recolher \u25b2" : "Expandir \u25bc"}</span>
-    </button>
-    ${s.fichaAberta ? `<div class="ex-ficha-corpo">
-      <div class="ex-cliente"><b>${esc(c.nome)}</b><span>CPF ${esc(c.cpf || "\u2014")} \u00b7 código ${esc(c.codigo)}</span></div>
-      <div class="ex-numeros">
-        <div><span>Em atraso</span><b>${esc(r.parcelas_atraso || 0)} \u00b7 ${realF(r.valor_atraso)}</b></div>
-        <div><span>Saldo de diárias</span><b>${esc(r.saldo_diarias ?? 0)}</b></div>
-      </div>
-      <div class="ex-secao">Títulos</div>
-      ${lista(f.titulos, "Sem títulos", (x) => `<li><span>${esc(x.numero)}</span><span class="pill ${x.status === 0 ? "ok" : "warn"}">${esc(x.status_nome || "")}</span></li>`)}
-      <div class="ex-secao">Parcelas em atraso</div>
-      ${lista(atrasadas, "Nenhuma", (x) => `<li><span>Venceu ${brDataF(x.vencimento)}</span><b>${realF(x.valor_receber || x.valor)}</b></li>`)}
-      <div class="ex-secao">Boletos em aberto</div>
-      ${lista(f.boletos, "Nenhum", (x) => `<li><span>Vence ${brDataF(x.vencimento)}</span><b>${realF(x.valor)}</b></li>`)}
-      <div class="ex-secao">Reservas</div>
-      ${lista(f.reservas, "Nenhuma nos últimos 90 dias", (x) => `<li class="ex-reserva"><span><b>${esc(x.hotel)}</b> \u00b7 ${esc(x.cidade || "")}/${esc(x.uf || "")}</span><span>${brDataF(x.entrada)} a ${brDataF(x.saida)} \u00b7 ${esc(x.status || "")}</span></li>`)}
-    </div>` : ""}
-  </div>`;
+function valorTexto(c) {
+  const partes = [];
+  if (c.dinheiro != null) partes.push(Number(c.dinheiro).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
+  if (c.pontos != null) partes.push(`${c.pontos} pts`);
+  return partes.join(" + ") || "disponível";
 }
 
-function desenharDetalhe(conversa) {
-  if (!conversa) {
-    return (s.estado?.conversas || []).length ? ""
-      : '<div class="vazio">Nenhum chat seu aberto agora. Quando um cliente falar com você, ele aparece aqui.</div>';
-  }
-  const ultima = ultimaDoCliente(conversa);
-  const alerta = alertaAtual(conversa);
-  const critico = cenarioDe(conversa)?.critico
-    ? '<p class="risco">Risco de reclamação formal: responda com calma e chame a coordenação se precisar.</p>' : "";
-  const corpo = conversa.encerrada ? '<p class="nota">Este atendimento foi encerrado.</p>'
-    : !ultima ? `<button class="primario largo ajuda" data-acao="gerar">✨ Quero ajuda do copiloto</button>
-      <p class="nota centro">A IA lê a conversa que está aberta no Interact e gera 2 respostas para a última mensagem do cliente.</p>`
-    : desenharSugestoes(conversa, ultima);
-  // hierarquia (o que ajuda a responder AGORA): alertas → conversa → sugestões → selo/ofertas → ficha (secundária)
-  return `<div class="detalhe">
-    <div class="detalhe-topo"><button class="link voltar" data-acao="voltar" aria-label="Voltar para a lista de chats">←</button><h3>${esc(conversa.cliente || "Cliente")}</h3>${conversa.call_id === s.naTela ? '<span class="selo tela">Na tela</span>' : ""}${selos(conversa)}</div>
-    ${desenharStatusCliente(conversa)}
-    ${critico}
-    ${alerta ? `<div class="alerta-atendente">⚠ ${esc(textoDoAlerta(alerta.alerta))}</div>` : ""}
-    ${desenharConversa(conversa, ultima)}
-    ${corpo}
-    ${desenharFicha(conversa)}
-  </div>`;
-}
-
-function registrarAlertas() {
-  const atual = conversaAtual();
-  const alerta = atual && alertaAtual(atual);
-  if (!alerta) return;
-  const chave = `${atual.call_id}#${alerta.mensagem.seq}`;
-  if (s.alertasVistos.has(chave)) return;
-  s.alertasVistos.add(chave);
-  for (const a of alerta.mensagem.alertas) registrar("alerta", { callId: atual.call_id, dados: alertaParaEvento(a) });
+function renderConversa() {
+  const msgs = (s.historico || []).slice(-6);
+  if (!msgs.length) return '<p class="nota">Abra um chat no Interact para o copiloto ler a conversa.</p>';
+  return `<div class="conversa">${msgs.map((m) => `<div class="msg ${m.direcao === "in" ? "cliente" : "atendente"}">
+    <span class="quem">${m.direcao === "in" ? esc(m.autor || "Cliente") : "Você"} ${esc(m.hora || "")}</span>
+    <div class="txt">${esc(m.texto)}</div></div>`).join("")}</div>`;
 }
 
 let ultimoHtml = "";
 function desenhar() {
   if (!s.ligado) return;
-  const sit = s.erro ? { nivel: "erro", texto: s.erro } : s.aviso ? { nivel: "aviso", texto: s.aviso } : situacao(s.estado);
+  const sit = s.erro ? { nivel: "erro", t: s.erro } : s.msg ? { nivel: "aviso", t: s.msg } : { nivel: "ok", t: s.callId ? "Lendo o chat aberto no Interact." : "Abra um chat no Interact." };
   $("situacao").className = `situacao ${sit.nivel}`;
-  if (s.supervisao) {
-    const alvo = s.estado?.atendente;
-    $("situacao").innerHTML = `<span>👁 Supervisão · ${esc(alvo?.alias || alvo?.login || "—")} · só leitura</span>`
-      + '<button class="secundario" data-acao="sup-trocar">Trocar atendente</button>';
-  } else {
-    $("situacao").innerHTML = `<span>${esc(sit.texto)}</span>${sit.nivel === "erro" ? '<button class="secundario" data-acao="tentar">Tentar de novo</button>' : ""}`;
-  }
-  // sem conexão com o Interact a lista estaria vazia ou velha: mostra só o aviso
-  const conectado = s.estado?.status === "conectado" || (s.estado?.conversas || []).length;
-  const atual = conversaAtual();
-  const html = conectado && !(sit.nivel === "erro" && !s.erro)
-    ? desenharDetalhe(atual) + (atual ? desenharPrecos(atual.call_id) : "") + desenharChats(s.estado?.conversas || [], atual?.call_id)
-    : "";
-  if (html === ultimoHtml) return; // não redesenha à toa (mantém foco e cliques)
+  const contInput = s.features.suggest ? `<label class="continuo"><input type="checkbox" data-campo="continuo" ${s.continuo ? "checked" : ""}> Sugerir a cada nova mensagem do cliente</label>` : "";
+  $("situacao").innerHTML = `<span>${esc(sit.t)}</span>`;
+  const html = `<div class="detalhe">
+    ${renderConversa()}
+    ${s.features.suggest ? renderSugestoes() : '<p class="nota">Seu usuário não tem a sugestão de IA habilitada.</p>'}
+    ${contInput}
+    ${renderCardapio()}
+    ${renderPrecos()}
+  </div>`;
+  if (html === ultimoHtml) return;
   ultimoHtml = html;
   const ativo = document.activeElement;
   const foco = ativo?.dataset?.campo;
-  const cursor = foco && (ativo.type === "text" || ativo.tagName === "TEXTAREA") ? [ativo.selectionStart, ativo.selectionEnd] : null;
-  $("conteudo").className = s.supervisao ? "sup" : "";
   $("conteudo").innerHTML = html;
-  const campo = $("conteudo").querySelector('[data-campo="comentario"]');
-  if (campo) campo.value = s.avaliacoes[campo.dataset.sugestao]?.comentario || "";
-  for (const [nome, valor] of Object.entries(atual ? precosDoChat(atual.call_id).form : {})) {
-    const entrada = $("conteudo").querySelector(`[data-campo="preco-${nome}"]`);
-    if (entrada?.type === "checkbox") entrada.checked = valor;
-    else if (entrada) entrada.value = valor;
+  const coment = $("conteudo").querySelector('[data-campo="comentario"]');
+  if (coment) coment.value = s.avaliacao.comentario || "";
+  for (const [nome, valor] of Object.entries(s.precos.form)) {
+    const el = $("conteudo").querySelector(`[data-campo="preco-${nome}"]`);
+    if (el?.type === "checkbox") el.checked = valor; else if (el) el.value = valor;
   }
   const volta = foco && $("conteudo").querySelector(`[data-campo="${foco}"]`);
-  if (volta) { volta.focus(); if (cursor) volta.setSelectionRange(...cursor); } // quem digitava continua no mesmo ponto
+  if (volta) volta.focus();
 }
 
-async function tentarDeNovo() {
-  s.erro = "";
-  try {
-    s.estado = await api.ativar(); // entra de novo na assinatura do Interact
-  } catch (erro) {
-    return tratar(erro, "sessao");
-  }
-  consultar();
+function avisar(texto) { s.msg = texto; desenhar(); setTimeout(() => { s.msg = ""; desenhar(); }, 6000); }
+
+async function inserir(texto) {
+  const r = await pedir({ tipo: "inserir", callId: s.callId, texto });
+  if (r?.ok) return true;
+  avisar(r?.motivo || "Não consegui escrever no Interact. Use Copiar.");
+  return false;
+}
+
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { avisar("Não consegui copiar. Use Ctrl+C."); return false; }
 }
 
 // ---------- ações ----------
 async function acao(evento) {
   const alvo = evento.target.closest("[data-acao]");
   if (!alvo) return;
-  const atual = conversaAtual();
-  const ultima = ultimaDoCliente(atual);
   const tipo = alvo.dataset.acao;
-  if (tipo === "tentar") {
-    tentarDeNovo();
-  } else if (tipo === "escolher") {
-    if (atual && alvo.dataset.chat !== atual.call_id) encerrarVistas(alvo.dataset.chat, "trocou_conversa");
-    s.escolhido = alvo.dataset.chat;
-    s.verLista = false;
-    registrar("escolheu_cliente", { callId: s.escolhido, dados: { conversas_abertas: (s.estado?.conversas || []).length } });
-    desenhar();
-  } else if (tipo === "gerar" && atual) {
-    alvo.disabled = true;
-    if (s.supervisao) {  // supervisão: gera pela conversa que o copiloto já captou (não registra uso)
-      try { await api.supSugerir(atual.call_id); } catch (erro) { avisar(erro.message); }
-    } else {
-      registrar("pediu_sugestao", { callId: atual.call_id, dados: { gatilho: "botao" } });
-      try { await api.sugerir(atual.call_id, await historicoDaTela(atual.call_id)); } catch (erro) { await tratar(erro, "sugerir"); }
-    }
-    consultar();
-  } else if ((tipo === "precos-abrir" || tipo === "precos-fechar") && atual) {
-    const p = precosDoChat(atual.call_id);
-    p.aberto = tipo === "precos-abrir";
-    if (p.aberto && !p.form.checkin) p.form.checkin = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
-    desenhar();
-  } else if (tipo === "precos-buscar" || tipo === "precos-hotel") {
-    buscarPrecos(alvo.dataset.id);
-  } else if (tipo === "precos-copiar" && atual && precosDoChat(atual.call_id).resultado) {
-    const r = precosDoChat(atual.call_id).resultado;
-    const cotacao = r.cotacoes.find((c) => c.checkin === alvo.dataset.checkin);
-    if (await copiar(textoDaOferta(cotacao, r.cotacoes.find((c) => c.checkin === r.pedida)))) avisar("✓ Oferta copiada. Cole no Interact e revise antes de enviar.");
-  } else if (tipo === "sup-trocar") {
-    pararConsulta();
-    s.estado = null;
-    ultimoHtml = "";
-    await abrirSupervisao();
-  } else if (tipo === "copiar-oferta") {
-    if (await copiar(alvo.dataset.texto)) avisar("\u2713 Oferta copiada. Revise e envie no Interact.");
-  } else if (tipo === "ficha-toggle") {
-    s.fichaAberta = !s.fichaAberta;
-    desenhar();
-  } else if (tipo === "voltar") {
-    s.verLista = true;
-    desenhar();
-  } else if ((tipo === "inserir" || tipo === "copiar") && ultima?.sugestoes) {
+  if (tipo === "gerar") { alvo.disabled = true; sugerir(false); }
+  else if ((tipo === "inserir" || tipo === "copiar") && s.sugestoes) {
     const i = Number(alvo.dataset.indice);
-    const texto = ultima.sugestoes[i]?.texto || "";
-    const ok = tipo === "inserir" ? await inserir(atual.call_id, texto) : await copiar(texto);
+    const texto = s.sugestoes[i]?.texto || "";
+    const ok = tipo === "inserir" ? await inserir(texto) : await copiar(texto);
     if (!ok) return;
-    const vista = s.vistas.get(ultima.sugestao_id);
-    if (vista) vista.usada = true;
-    registrar(tipo === "inserir" ? "inseriu" : "copiou", { callId: atual.call_id, sugestaoId: ultima.sugestao_id, dados: { indice: i + 1 } });
-    s.feito[`${ultima.sugestao_id}#${i}`] = tipo === "inserir" ? "✓ Inserida no fim da caixa. Revise e envie no Interact." : "✓ Copiada";
+    s.usada = true;
+    registrar(tipo === "inserir" ? "inseriu" : "copiou", { callId: s.callId, sugestaoId: s.sugestaoId, dados: { indice: i + 1 } });
+    s.feito[i] = tipo === "inserir" ? "✓ Inserida. Revise e envie no Interact." : "✓ Copiada";
     desenhar();
-  } else if (tipo === "nota" && ultima?.sugestao_id) {
-    s.avaliacoes[ultima.sugestao_id] = { ...s.avaliacoes[ultima.sugestao_id], nota: alvo.dataset.nota };
+  } else if (tipo === "nota" && s.sugestaoId) {
+    s.avaliacao = { ...s.avaliacao, nota: alvo.dataset.nota }; desenhar();
+  } else if (tipo === "avaliar" && s.sugestaoId) {
+    registrar("avaliou", { callId: s.callId, sugestaoId: s.sugestaoId, dados: { nota: s.avaliacao.nota, comentario: s.avaliacao.comentario?.trim() || undefined } });
+    s.avaliacao.enviada = true; enviar(); desenhar();
+  } else if (tipo === "cardapio") { carregarCardapio(); }
+  else if (tipo === "cardapio-fechar") { s.cardapio = null; desenhar(); }
+  else if (tipo === "copiar-texto") { if (await copiar(alvo.dataset.texto)) { registrar("copiou", { callId: s.callId, dados: {} }); avisar("✓ Copiado. Revise e envie no Interact."); } }
+  else if (tipo === "precos-abrir" || tipo === "precos-fechar") {
+    s.precos.aberto = tipo === "precos-abrir";
+    if (s.precos.aberto && !s.precos.form.checkin) s.precos.form.checkin = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
     desenhar();
-  } else if (tipo === "avaliar" && ultima?.sugestao_id) {
-    const a = s.avaliacoes[ultima.sugestao_id];
-    registrar("avaliou", { callId: atual.call_id, sugestaoId: ultima.sugestao_id,
-      dados: { nota: a.nota, comentario: a.comentario?.trim() || undefined } });
-    a.enviada = true;
-    enviar(); // sem rede, fica na fila e vai depois
-    desenhar();
-  }
-}
-
-// aviso de uma ação (inserir/copiar): some sozinho, sem botão de Tentar de novo
-function avisar(texto) {
-  s.aviso = texto;
-  desenhar();
-  setTimeout(() => { s.aviso = ""; desenhar(); }, 6000);
-}
-
-async function inserir(callId, texto) {
-  const aba = await abaDoInteract();
-  let resposta = null;
-  try {
-    resposta = aba && (await chrome.tabs.sendMessage(aba.id, { tipo: "inserir", callId, texto }));
-  } catch { /* sem content script na aba */ }
-  if (resposta?.ok) return true;
-  avisar(resposta?.motivo || "Não consegui escrever no Interact. Use “Copiar” e cole na resposta.");
-  return false;
-}
-
-async function copiar(texto) {
-  try {
-    await navigator.clipboard.writeText(texto);
-    return true;
-  } catch {
-    avisar("Não consegui copiar. Selecione o texto e use Ctrl+C.");
-    return false;
-  }
+  } else if (tipo === "precos-buscar") { buscarPrecos(); }
 }
 
 // ---------- ligações ----------
 $("form-login").addEventListener("submit", async (evento) => {
   evento.preventDefault();
   $("erro-login").textContent = "";
-  const botao = evento.submitter;
-  botao.disabled = true;
+  const botao = evento.submitter; botao.disabled = true;
   try {
     const usuario = await api.entrar($("email").value.trim(), $("senha").value);
     $("senha").value = "";
+    s.features = (await api.config()).sessao?.features || {};
     $("usuario").textContent = usuario?.nome || usuario?.email || "";
     $("sair").hidden = false;
     mostrar("tela-desligado");
   } catch (erro) {
     $("erro-login").textContent = erro.status === 401 ? "E-mail ou senha incorretos." : erro.message;
-  } finally {
-    botao.disabled = false;
-  }
+  } finally { botao.disabled = false; }
 });
 $("ligar").addEventListener("click", ligar);
-$("modo-supervisao").addEventListener("click", abrirSupervisao);
-$("supAcompanhar").addEventListener("click", iniciarSupervisao);
-$("supAuto").addEventListener("click", iniciarSupervisaoAuto);
-$("supAtualizar").addEventListener("click", carregarListaSup);
 $("desligar").addEventListener("click", desligar);
 $("sair").addEventListener("click", async () => {
   if (s.ligado) await desligar();
-  await api.sair();
-  await limparFila();
-  $("usuario").textContent = "";
-  $("sair").hidden = true;
+  await api.sair(); await limparFila();
+  $("usuario").textContent = ""; $("sair").hidden = true;
   mostrar("tela-login");
 });
-$("minimizar").addEventListener("click", () => window.close()); // fecha o painel; o ícone da extensão traz de volta
+$("minimizar").addEventListener("click", () => window.close());
 $("abrir-opcoes").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("tela-ligado").addEventListener("click", acao);
 $("tela-ligado").addEventListener("input", (evento) => {
-  const campo = evento.target;
-  if (campo.dataset.campo === "comentario") s.avaliacoes[campo.dataset.sugestao].comentario = campo.value;
-  else if (campo.dataset.campo?.startsWith("preco-")) { const a = conversaAtual(); if (a) precosDoChat(a.call_id).form[campo.dataset.campo.slice(6)] = campo.type === "checkbox" ? campo.checked : campo.value; }
-});
-$("tela-ligado").addEventListener("keydown", (evento) => {
-  if (evento.key === "Enter" && evento.target.dataset.campo?.startsWith("preco-")) buscarPrecos();
+  const campo = evento.target.dataset.campo;
+  if (campo === "comentario") s.avaliacao.comentario = evento.target.value;
+  else if (campo === "continuo") { s.continuo = evento.target.checked; if (s.continuo) perguntarTela(); }
+  else if (campo?.startsWith("preco-")) s.precos.form[campo.slice(6)] = evento.target.type === "checkbox" ? evento.target.checked : evento.target.value;
 });
 chrome.storage.onChanged.addListener((mudou) => { if (mudou.urlView) iniciar(); });
 
