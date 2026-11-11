@@ -162,10 +162,9 @@ async function buscarPrecos(idHotel) {
   if (p.buscando) return;
   p.erro = ""; p.escolhas = null;
   const termo = p.form.hotel.trim();
-  if (!idHotel && !/^\d+$/.test(termo)) {
-    if (termo.length < 3) { p.erro = "Digite o nome (3+ letras) ou o ID do hotel."; return desenhar(); }
-    // sem o endpoint de busca por nome no stateless: peça o ID (o nome exige o motor do Reservas)
-    p.erro = "Informe o ID do hotel (número)."; return desenhar();
+  // aceita o ID (número) ou o NOME: o worker resolve o nome pelo melhor match do Reservas
+  if (!idHotel && !/^\d+$/.test(termo) && termo.length < 3) {
+    p.erro = "Digite o nome (3+ letras) ou o ID do hotel."; return desenhar();
   }
   if (!p.form.checkin) { p.erro = "Informe o check-in."; return desenhar(); }
   p.buscando = true; desenhar();
@@ -228,12 +227,13 @@ function renderPrecos() {
   const r = p.resultado;
   const linhas = r && r.cotacoes ? r.cotacoes.map((c) => `<li>${esc(c.checkin)} — ${c.disponivel ? esc(valorTexto(c)) : "não confirmado"}${c.checkin === r.mais_barata ? ' <span class="selo barata">mais barata</span>' : ""}</li>`).join("") : "";
   return `<div class="precos"><div class="detalhe-topo"><h3>💰 Datas mais baratas</h3><button class="link" data-acao="precos-fechar">✕</button></div>
-    <label class="campo-preco"><span>Hotel (ID)</span><input type="text" data-campo="preco-hotel" placeholder="ex.: 93933"></label>
+    <label class="campo-preco"><span>Hotel (nome ou ID)</span><input type="text" data-campo="preco-hotel" placeholder="ex.: Boreas ou 93933"></label>
     <label class="campo-preco"><span>Check-in</span><input type="date" data-campo="preco-checkin"></label>
     <label class="campo-preco"><span>Noites</span><input type="number" min="1" max="14" data-campo="preco-noites"></label>
     <label class="campo-preco"><span>Adultos</span><input type="number" min="1" max="6" data-campo="preco-adultos"></label>
     <button class="primario largo" data-acao="precos-buscar" ${p.buscando ? "disabled" : ""}>${p.buscando ? "Consultando…" : "Buscar"}</button>
     ${p.erro ? `<p class="aviso-caixa">${esc(p.erro)}</p>` : ""}
+    ${r && r.hotel_nome ? `<p class="nota">Hotel: <b>${esc(r.hotel_nome)}</b></p>` : ""}
     ${r && r.disponivel === false ? `<p class="aviso-caixa">${esc(r.aviso || "Preço no plano do cliente indisponível.")}</p>` : ""}
     ${linhas ? `<ul class="cotacoes">${linhas}</ul>` : ""}</div>`;
 }
