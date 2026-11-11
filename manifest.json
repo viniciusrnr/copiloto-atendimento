@@ -5,7 +5,7 @@
   "description": "Sugestões de resposta da IA para os seus chats do Interact. Você revisa e envia.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "sidePanel"],
-  "host_permissions": ["https://rdc.digitro.cloud/*"],
+  "host_permissions": ["https://rdc.digitro.cloud/*", "https://hmgpainelassistente.rdcviagens.com.br/*", "https://painelassistente.rdcviagens.com.br/*"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*"],
   "background": { "service_worker": "src/background.js", "type": "module" },
   "side_panel": { "default_path": "sidepanel/sidepanel.html" },
