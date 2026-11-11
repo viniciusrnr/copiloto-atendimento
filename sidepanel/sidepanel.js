@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 const s = {
-  ligado: false, features: {}, callId: null, cpf: null, cliente: null,
+  ligado: false, features: {}, callId: null, cpf: null, cliente: null, ficha: null, fichaAberta: false,
   historico: [], sugestoes: null, sugestaoId: null, aviso: null, cenario: null, gerando: false, erro: "",
   continuo: false, chaveUltimaSug: null, feito: {}, avaliacao: {}, usada: false,
   cardapio: null, cardapioErro: "", msg: "",
@@ -89,15 +89,20 @@ async function aoMudarTela(tela) {
     s.sugestoes = null; s.sugestaoId = null; s.aviso = null; s.cenario = null;
     s.cardapio = null; s.cardapioErro = ""; s.chaveUltimaSug = null; s.usada = false;
   }
-  s.cpf = tela?.cpf || null;
+  const cpfNovo = tela?.cpf || null;
+  if (cpfNovo !== s.cpf) { s.cpf = cpfNovo; s.ficha = null; carregarFicha(); }  // CPF mudou: recarrega a ficha
   s.historico = callId ? (await pedir({ tipo: "historico?", callId })) || [] : [];
   // acompanha o uso: atendente respondeu depois da sugestão?
   registrarEnvioSeRespondeu();
-  // modo contínuo: nova mensagem do cliente desde a última sugestão → pede sozinho
-  if (s.continuo && s.features.suggest && !s.gerando && callId) {
+  // mensagem nova do cliente desde a última sugestão: some a sugestão antiga e reaparece "Gerar mensagem";
+  // no modo contínuo, pede sozinho. (Sem msg nova, NÃO oferece "tentar de novo".)
+  if (s.features.suggest && callId && !s.gerando) {
     const ultima = [...s.historico].reverse().find((m) => m.direcao === "in");
     const chave = ultima ? `${ultima.id || ""}#${ultima.texto}` : null;
-    if (chave && chave !== s.chaveUltimaSug) sugerir(true);
+    if (chave && chave !== s.chaveUltimaSug) {
+      if (s.sugestoes !== null) { s.sugestoes = null; s.sugestaoId = null; s.aviso = null; }
+      if (s.continuo) sugerir(true);
+    }
   }
   desenhar();
 }
@@ -143,6 +148,38 @@ function registrarEnvioSeRespondeu() {
   }
 }
 
+// ---------- ficha do cliente ----------
+async function carregarFicha() {
+  if (!s.cpf) { s.ficha = null; return desenhar(); }
+  try {
+    const d = await api.fichaDireto(s.cpf);
+    s.ficha = d && d.encontrado ? d : null;
+  } catch (erro) {
+    if (erro instanceof api.SessaoExpirada) return voltarAoLogin();
+    s.ficha = null;
+  }
+  desenhar();
+}
+
+function renderFicha() {
+  if (!s.ficha) return "";
+  const f = s.ficha, c = f.cliente || {}, sit = f.situacao || {}, di = f.diarias || {};
+  if (!s.fichaAberta) return `<button class="link" data-acao="ficha-toggle">👤 Dados do cliente de ${esc(c.nome || "—")} ▸</button>`;
+  const money = (v) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const titulos = (f.titulos || []).map((t) => `<li>Título ${esc(String(t.numero ?? ""))} — ${esc(t.status || "")}</li>`).join("");
+  const reservas = (f.reservas || []).map((r) => `<li>${esc(r.hotel || "—")} · ${esc(r.entrada || "?")}→${esc(r.saida || "?")} (${esc(r.status || "")})</li>`).join("");
+  const contato = [c.celular, c.email].filter(Boolean).map(esc).join(" · ");
+  return `<div class="ficha">
+    <div class="detalhe-topo"><h3>👤 Dados do cliente</h3><button class="link" data-acao="ficha-toggle">▾ recolher</button></div>
+    <p><b>${esc(c.nome || "—")}</b>${c.codigo ? ` · cód ${esc(String(c.codigo))}` : ""}</p>
+    ${c.cpf || contato ? `<p class="nota">${esc(c.cpf || "")}${contato ? " · " + contato : ""}</p>` : ""}
+    <p>${sit.adimplente ? "✅ Adimplente" : `⚠️ ${esc(String(sit.parcelas_atraso))} parcela(s) em atraso · ${money(sit.valor_atraso)}`}</p>
+    <p>Diárias: saldo <b>${esc(String(di.saldo ?? "—"))}</b> (adquiridas ${esc(String(di.adquiridas ?? "—"))} / usadas ${esc(String(di.utilizadas ?? "—"))})</p>
+    ${titulos ? `<div class="ficha-sec"><b>Títulos</b><ul class="ex-lista">${titulos}</ul></div>` : ""}
+    ${reservas ? `<div class="ficha-sec"><b>Reservas</b><ul class="ex-lista">${reservas}</ul></div>` : ""}
+  </div>`;
+}
+
 // ---------- cardápio (inadimplente) ----------
 async function carregarCardapio() {
   if (!s.cpf || !s.features.rules) return;
@@ -184,11 +221,10 @@ async function buscarPrecos(idHotel) {
 function renderSugestoes() {
   if (s.gerando) return '<div class="gerando">Gerando sugestões… (até 20 s)</div>';
   if (s.aviso) return '<div class="aviso-caixa">Você está cotando, então a IA fica em pausa. Quando tiver os valores, peça de novo.</div>'
-    + '<button class="primario largo ajuda" data-acao="gerar">✨ Quero ajuda do copiloto</button>';
-  if (!s.sugestoes) return `<button class="primario largo ajuda" data-acao="gerar">✨ Quero ajuda do copiloto</button>
+    + '<button class="primario largo ajuda" data-acao="gerar">✨ Gerar mensagem</button>';
+  if (!s.sugestoes) return `<button class="primario largo ajuda" data-acao="gerar">✨ Gerar mensagem</button>
     <p class="nota centro">Gera respostas para a última mensagem do cliente no chat aberto.</p>`;
-  if (!s.sugestoes.length) return `<p class="nota">A IA não sugeriu aqui (sem confiança ou fora de gatilho). Tente de novo ou responda do seu jeito.</p>
-    <button class="link" data-acao="gerar">↻ Tentar de novo</button>`;
+  if (!s.sugestoes.length) return `<p class="nota">A IA não sugeriu aqui (sem confiança ou fora de gatilho). Responda do seu jeito — quando o cliente mandar outra mensagem, eu tento de novo.</p>`;
   return '<h4 class="rotulo-sugestoes">Sugestões para a última mensagem do cliente</h4>' + s.sugestoes.map((sug, i) => {
     const feito = s.feito[i];
     return `<div class="sugestao"><div class="texto">${esc(sug.texto)}</div>
@@ -262,6 +298,7 @@ function desenhar() {
   $("situacao").innerHTML = `<span>${esc(sit.t)}</span>`;
   const html = `<div class="detalhe">
     ${renderConversa()}
+    ${renderFicha()}
     ${s.features.suggest ? renderSugestoes() : '<p class="nota">Seu usuário não tem a sugestão de IA habilitada.</p>'}
     ${contInput}
     ${renderCardapio()}
@@ -317,6 +354,7 @@ async function acao(evento) {
     s.avaliacao.enviada = true; enviar(); desenhar();
   } else if (tipo === "cardapio") { carregarCardapio(); }
   else if (tipo === "cardapio-fechar") { s.cardapio = null; desenhar(); }
+  else if (tipo === "ficha-toggle") { s.fichaAberta = !s.fichaAberta; desenhar(); }
   else if (tipo === "copiar-texto") { if (await copiar(alvo.dataset.texto)) { registrar("copiou", { callId: s.callId, dados: {} }); avisar("✓ Copiado. Revise e envie no Interact."); } }
   else if (tipo === "precos-abrir" || tipo === "precos-fechar") {
     s.precos.aberto = tipo === "precos-abrir";

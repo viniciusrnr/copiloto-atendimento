@@ -188,10 +188,16 @@
   }
 
   let ultimo = "";
+  function ultimaMarca(callId) {
+    const msgs = container(callId)?.querySelectorAll("[message_direction]");
+    const ult = msgs && msgs[msgs.length - 1];
+    return ult ? `${msgs.length}:${ult.getAttribute("name") || ult.innerText.trim().slice(-40)}` : null;
+  }
   function avisarTela() {
     const callId = conversaNaTela();
     const tela = { callId, cpf: callId ? cpfNaTela(callId) : null };
-    const chave = JSON.stringify(tela);
+    // a chave inclui a última mensagem: msg nova (mesmo callId/cpf) tem que notificar a sidebar (p/ o modo contínuo)
+    const chave = JSON.stringify({ ...tela, marca: callId ? ultimaMarca(callId) : null });
     if (chave === ultimo) return;
     ultimo = chave;
     chrome.runtime.sendMessage({ tipo: "tela", ...tela }).catch(() => {}); // painel fechado: ninguém ouvindo

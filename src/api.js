@@ -58,6 +58,7 @@ export const enviarEventos = (eventos) => chamar("POST", "/eventos-direto", { ev
 // caminho stateless (sem o listener): a extensão manda o que leu da tela do Interact
 export const sugerirDireto = (corpo) => chamar("POST", "/sugerir-direto", corpo);
 export const cardapio = (cpf) => chamar("POST", "/cardapio", { cpf });
+export const fichaDireto = (cpf) => chamar("POST", "/ficha-direto", { cpf });
 export const precosDireto = (corpo) => chamar("POST", "/precos-direto", corpo);
 
 // Modo supervisão: SÓ no ambiente local. Sem login, lê quem está atendendo e acompanha ao vivo (só leitura). As rotas
