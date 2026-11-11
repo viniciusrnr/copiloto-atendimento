@@ -214,6 +214,32 @@
       responder(historico(pedido.callId));
     }
   });
+  // ---- painel embutido NA PÁGINA do Interact (canto direito, minimizável) ----
+  // Antes o copiloto era o painel lateral do Chrome (fora da aba). Agora injeta a MESMA UI (sidepanel.html)
+  // como iframe fixo no canto direito; o botão "minimizar" da UI recolhe para uma bolha, tudo dentro da aba.
+  function montarPainel() {
+    if (window.top !== window) return;               // só no frame principal
+    if (document.getElementById("copiloto-embed")) return;
+    const root = document.createElement("div");
+    root.id = "copiloto-embed";
+    root.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:2147483647;";
+    const frame = document.createElement("iframe");
+    frame.src = chrome.runtime.getURL("sidepanel/sidepanel.html");
+    frame.setAttribute("title", "Copiloto de Atendimento");
+    frame.style.cssText = "width:390px;height:min(640px,82vh);border:0;border-radius:12px;" +
+      "box-shadow:0 8px 30px rgba(0,0,0,.28);background:#fff;";
+    const bolha = document.createElement("button");
+    bolha.textContent = "💬 Copiloto";
+    bolha.style.cssText = "display:none;cursor:pointer;border:0;border-radius:24px;padding:10px 16px;" +
+      "background:#1a3cff;color:#fff;font:600 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.25);";
+    root.append(frame, bolha);
+    const mostrar = (aberto) => { frame.style.display = aberto ? "block" : "none"; bolha.style.display = aberto ? "none" : "block"; };
+    bolha.addEventListener("click", () => mostrar(true));
+    window.addEventListener("message", (e) => { if (e.data === "copiloto-minimizar") mostrar(false); });
+    document.body.appendChild(root);
+  }
+
+  montarPainel();
   avisarTela();
   prepararCaixas();
 })();

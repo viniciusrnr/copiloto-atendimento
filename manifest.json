@@ -19,6 +19,6 @@
     { "matches": ["https://rdc.digitro.cloud/*"], "js": ["src/content.js"], "run_at": "document_idle" }
   ],
   "web_accessible_resources": [
-    { "resources": ["src/regras.js"], "matches": ["https://rdc.digitro.cloud/*"] }
+    { "resources": ["sidepanel/*", "src/*"], "matches": ["https://rdc.digitro.cloud/*"] }
   ]
 }

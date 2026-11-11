@@ -349,7 +349,10 @@ $("sair").addEventListener("click", async () => {
   $("usuario").textContent = ""; $("sair").hidden = true;
   mostrar("tela-login");
 });
-$("minimizar").addEventListener("click", () => window.close());
+$("minimizar").addEventListener("click", () => {
+  if (window.parent !== window) window.parent.postMessage("copiloto-minimizar", "*");  // embutido na página: recolhe pra bolha
+  else window.close();  // painel lateral do Chrome
+});
 $("abrir-opcoes").addEventListener("click", () => chrome.runtime.openOptionsPage());
 $("tela-ligado").addEventListener("click", acao);
 $("tela-ligado").addEventListener("input", (evento) => {
