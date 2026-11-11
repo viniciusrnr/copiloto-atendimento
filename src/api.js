@@ -2,13 +2,16 @@
 // Só o token vai para o chrome.storage; a senha nunca é guardada.
 
 const PREFIXO = "/api/copiloto/extensao";
+const PADRAO_URL = "";  // o build de HMG semeia esta constante com a URL do painel (login automático, sem preencher)
 
 export class SessaoExpirada extends Error {}
 
 export async function config() {
-  const { urlView = "", sessao = null } = await chrome.storage.local.get(["urlView", "sessao"]);
+  const { urlView: armazenado, sessao = null } = await chrome.storage.local.get(["urlView", "sessao"]);
+  // storage vazio/ausente -> cai na URL semeada (não sobrepõe o padrão com "" guardado por build antigo)
+  const urlView = ((armazenado || "").trim() || PADRAO_URL).replace(/\/+$/, "");
   const valida = sessao && sessao.token && (!sessao.expira_em || Date.parse(sessao.expira_em) > Date.now());
-  return { urlView: urlView.replace(/\/+$/, ""), sessao: valida ? sessao : null };
+  return { urlView, sessao: valida ? sessao : null };
 }
 
 async function chamar(metodo, caminho, corpo) {
