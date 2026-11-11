@@ -98,7 +98,7 @@ async function aoMudarTela(tela) {
   // no modo contínuo, pede sozinho. (Sem msg nova, NÃO oferece "tentar de novo".)
   if (s.features.suggest && callId && !s.gerando) {
     const ultima = [...s.historico].reverse().find((m) => m.direcao === "in");
-    const chave = ultima ? `${ultima.id || ""}#${ultima.texto}` : null;
+    const chave = ultima ? (ultima.id || `t:${ultima.texto}`) : null;  // id estável: evita reset por re-render do DOM
     if (chave && chave !== s.chaveUltimaSug) {
       if (s.sugestoes !== null) { s.sugestoes = null; s.sugestaoId = null; s.aviso = null; }
       if (s.continuo) sugerir(true);
@@ -117,7 +117,7 @@ async function sugerir(automatico = false) {
   if (!s.callId || s.gerando || !s.features.suggest) return;
   const ultima = [...s.historico].reverse().find((m) => m.direcao === "in");
   if (!ultima) { s.msg = "Sem mensagem do cliente na tela para sugerir."; return desenhar(); }
-  s.chaveUltimaSug = `${ultima.id || ""}#${ultima.texto}`;
+  s.chaveUltimaSug = ultima.id || `t:${ultima.texto}`;  // mesma chave estável do aoMudarTela
   s.gerando = true; s.erro = ""; s.usada = false;
   registrar("pediu_sugestao", { callId: s.callId, dados: { gatilho: automatico ? "automatico" : "botao" } });
   desenhar();

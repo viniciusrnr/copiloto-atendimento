@@ -71,7 +71,7 @@
     conferindo.add(callId);
     let resposta = null;
     try {
-      resposta = await chrome.runtime.sendMessage({ tipo: "verificar", callId, texto });
+      resposta = await chrome.runtime.sendMessage({ tipo: "verificar", callId, texto, cpf: cpfNaTela(callId) });
     } catch { /* sem resposta: não trava o atendimento */ } finally {
       conferindo.delete(callId);
     }

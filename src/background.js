@@ -11,7 +11,7 @@ chrome.runtime.onMessage.addListener((pedido, _remetente, responder) => {
   if (pedido.tipo !== "verificar") return false;
   const livre = { alertas: [], livre: true }; // não conferiu: o content não conta como correção
   Promise.race([
-    verificar(pedido.callId, pedido.texto).then((dados) => ({ alertas: dados?.alertas || [] }), () => livre),
+    verificar(pedido.texto, pedido.cpf).then((dados) => ({ alertas: dados?.alertas || [] }), () => livre),
     new Promise((ok) => setTimeout(() => ok(livre), ESPERA_VERIFICAR_MS)),
   ]).then(responder);
   return true;

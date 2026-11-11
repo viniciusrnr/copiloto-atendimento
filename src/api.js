@@ -52,7 +52,7 @@ export const ativar = () => chamar("POST", "/sessao");
 export const desativar = () => chamar("POST", "/sessao/encerrar");
 export const estado = () => chamar("GET", "/estado");
 export const sugerir = (callId, historico) => chamar("POST", `/sugerir/${id(callId)}`, historico?.length ? { historico } : undefined);
-export const verificar = (callId, texto) => chamar("POST", `/verificar/${id(callId)}`, { texto });
+export const verificar = (texto, cpf) => chamar("POST", "/verificar-direto", { texto, cpf });  // trava do Enviar stateless
 export const hoteis = (termo) => chamar("GET", `/hoteis?${new URLSearchParams({ termo })}`);
 export const precosHotel = (params) => chamar("GET", `/precos-hotel?${new URLSearchParams(params)}`);
 export const informarCpf = (callId, cpf) => chamar("POST", `/cliente/${id(callId)}`, { cpf });
