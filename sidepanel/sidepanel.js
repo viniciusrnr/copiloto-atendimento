@@ -151,6 +151,9 @@ function registrarEnvioSeRespondeu() {
   if (ultima && ultima.direcao === "out") {  // atendente mandou algo depois da sugestão
     const uso = usoDaSugestao((s.sugestoes || []).map((x) => x.texto ? x : { texto: x.texto }), ultima.texto);
     registrar("enviou", { callId: s.callId, sugestaoId: s.sugestaoId, dados: uso });
+    // consulta da coordenação: guarda o que o atendente enviou e o % usado (best-effort, não trava nada)
+    api.transcricaoComplemento({ sugestao_id: s.sugestaoId, texto_enviado: ultima.texto,
+      percentual: Math.round((uso.similaridade || 0) * 100), uso: uso.uso }).catch(() => {});
     s.usada = true;
   }
 }
@@ -358,6 +361,7 @@ async function acao(evento) {
     s.avaliacao = { ...s.avaliacao, nota: alvo.dataset.nota }; desenhar();
   } else if (tipo === "avaliar" && s.sugestaoId) {
     registrar("avaliou", { callId: s.callId, sugestaoId: s.sugestaoId, dados: { nota: s.avaliacao.nota, comentario: s.avaliacao.comentario?.trim() || undefined } });
+    api.transcricaoComplemento({ sugestao_id: s.sugestaoId, nota: s.avaliacao.nota, comentario: s.avaliacao.comentario?.trim() || undefined }).catch(() => {});  // consulta da coordenação
     s.avaliacao.enviada = true; enviar(); desenhar();
   } else if (tipo === "cardapio") { carregarCardapio(); }
   else if (tipo === "cardapio-fechar") { s.cardapio = null; desenhar(); }

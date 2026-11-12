@@ -62,6 +62,8 @@ export const enviarEventos = (eventos) => chamar("POST", "/eventos-direto", { ev
 export const sugerirDireto = (corpo) => chamar("POST", "/sugerir-direto", corpo);
 export const cardapio = (cpf) => chamar("POST", "/cardapio", { cpf });
 export const fichaDireto = (cpf) => chamar("POST", "/ficha-direto", { cpf });
+// completa a transcrição (consulta da coordenação): o que o atendente enviou (texto + % de uso) e a avaliação
+export const transcricaoComplemento = (corpo) => chamar("POST", "/transcricao-complemento", corpo);
 export const precosDireto = (corpo) => chamar("POST", "/precos-direto", corpo);
 
 // Modo supervisão: SÓ no ambiente local. Sem login, lê quem está atendendo e acompanha ao vivo (só leitura). As rotas
