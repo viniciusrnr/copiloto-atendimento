@@ -20,6 +20,13 @@ const s = {
 function mostrar(tela) {
   for (const id of ["tela-config", "tela-login", "tela-supervisao", "tela-desligado", "tela-ligado"]) $(id).hidden = id !== tela;
   $("desligar").hidden = tela !== "tela-ligado";
+  if (tela === "tela-login") preencherLogin();  // com sessão longa, re-login é raro; o e-mail já vem pronto
+}
+
+// e-mail da última vez já preenchido (a senha nunca é guardada — fica no gerenciador do navegador)
+async function preencherLogin() {
+  const { ultimoEmail } = await chrome.storage.local.get("ultimoEmail");
+  if (ultimoEmail) { $("email").value = ultimoEmail; $("senha").focus(); } else $("email").focus();
 }
 
 async function iniciar() {
@@ -369,7 +376,9 @@ $("form-login").addEventListener("submit", async (evento) => {
   $("erro-login").textContent = "";
   const botao = evento.submitter; botao.disabled = true;
   try {
-    const usuario = await api.entrar($("email").value.trim(), $("senha").value);
+    const email = $("email").value.trim();
+    const usuario = await api.entrar(email, $("senha").value);
+    chrome.storage.local.set({ ultimoEmail: email });  // pré-preenche no próximo login
     $("senha").value = "";
     s.features = (await api.config()).sessao?.features || {};
     $("usuario").textContent = usuario?.nome || usuario?.email || "";
