@@ -80,6 +80,16 @@ export function ehLocal(urlView) {
   }
 }
 
+// Produção = o painel de produção. Fora dela (HMG/local) liberamos o campo de CPF manual (teste): em produção
+// o atendente só vê a ficha do cliente do próprio chat, então a busca livre por CPF não pode aparecer lá.
+export function ehProducao(urlView) {
+  try {
+    return new URL(urlView).hostname === "painelassistente.rdcviagens.com.br";
+  } catch {
+    return false;
+  }
+}
+
 async function chamarLocal(metodo, caminho, corpo) {
   const { urlView } = await config();
   if (!urlView) throw new Error("Configure o endereço do painel nas opções da extensão.");

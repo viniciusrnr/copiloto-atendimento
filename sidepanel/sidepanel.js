@@ -3,7 +3,7 @@
 // chat que está na tela. Modo contínuo: a cada nova mensagem do cliente, pede sozinho (1 por vez).
 import * as api from "../src/api.js";
 import { enviar, iniciarFila, limparFila, novaSessao, registrar } from "../src/eventos.js";
-import { usoDaSugestao } from "../src/regras.js";
+import { cpfValido, usoDaSugestao } from "../src/regras.js";
 
 const INTERACT = "https://rdc.digitro.cloud/*";
 const $ = (id) => document.getElementById(id);
@@ -11,6 +11,7 @@ const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 const s = {
   ligado: false, features: {}, callId: null, cpf: null, cliente: null, ficha: null, fichaAberta: false,
+  cpfManual: null, cpfManualInput: "", cpfManualPermitido: false,  // campo de CPF manual (teste): só fora de produção
   historico: [], sugestoes: null, sugestaoId: null, aviso: null, cenario: null, gerando: false, erro: "",
   continuo: false, chaveUltimaSug: null, feito: {}, avaliacao: {}, usada: false,
   cardapio: null, cardapioErro: "", msg: "",
@@ -32,6 +33,7 @@ async function preencherLogin() {
 async function iniciar() {
   await iniciarFila();
   const { urlView, sessao } = await api.config();
+  s.cpfManualPermitido = !api.ehProducao(urlView);  // busca livre por CPF: só em HMG/local, nunca em produção
   $("usuario").textContent = sessao ? sessao.usuario?.nome || sessao.usuario?.email || "" : "";
   $("sair").hidden = !sessao;
   $("modo-supervisao").hidden = true;  // supervisão central dependia do monitor: fora do modelo stateless
@@ -96,7 +98,8 @@ async function aoMudarTela(tela) {
     s.sugestoes = null; s.sugestaoId = null; s.aviso = null; s.cenario = null;
     s.cardapio = null; s.cardapioErro = ""; s.chaveUltimaSug = null; s.usada = false;
   }
-  const cpfNovo = tela?.cpf || null;
+  // CPF da tela tem prioridade; sem ele, usa o CPF manual de teste (quando houver), que a sincronia não apaga
+  const cpfNovo = tela?.cpf || s.cpfManual || null;
   if (cpfNovo !== s.cpf) { s.cpf = cpfNovo; s.ficha = null; carregarFicha(); }  // CPF mudou: recarrega a ficha
   s.historico = callId ? (await pedir({ tipo: "historico?", callId })) || [] : [];
   // acompanha o uso: atendente respondeu depois da sugestão?
@@ -169,6 +172,32 @@ async function carregarFicha() {
     s.ficha = null;
   }
   desenhar();
+}
+
+// ---------- CPF manual (teste, só fora de produção) ----------
+function carregarCpfManual() {
+  const digitos = (s.cpfManualInput || "").replace(/\D/g, "");
+  if (!cpfValido(digitos)) return avisar("CPF inválido — confira os números.");
+  s.cpfManual = digitos;
+  if (s.cpf !== digitos) { s.cpf = digitos; s.ficha = null; carregarFicha(); } else desenhar();
+}
+
+function limparCpfManual() {
+  s.cpfManual = null; s.cpfManualInput = "";
+  s.cpf = null; s.ficha = null; s.cardapio = null;  // volta ao CPF da tela (se houver); senão, sem cliente
+  carregarFicha();
+}
+
+function renderCpfManual() {
+  if (!s.cpfManualPermitido) return "";
+  const atual = s.cpfManual
+    ? `<p class="nota">Testando com CPF <b>${esc(s.cpfManual)}</b> · <button class="link" data-acao="cpf-limpar">limpar</button></p>`
+    : "";
+  return `<div class="cpf-manual">
+    <label class="campo-preco"><span>CPF manual (teste — fora de produção)</span>
+      <input type="text" data-campo="cpf-manual" inputmode="numeric" maxlength="14" placeholder="digite um CPF para carregar a ficha"></label>
+    <button class="secundario largo" data-acao="cpf-carregar">Carregar ficha pelo CPF</button>
+    ${atual}</div>`;
 }
 
 function renderFicha() {
@@ -308,6 +337,7 @@ function desenhar() {
   $("situacao").innerHTML = `<span>${esc(sit.t)}</span>`;
   const html = `<div class="detalhe">
     ${renderConversa()}
+    ${renderCpfManual()}
     ${renderFicha()}
     ${s.features.suggest ? renderSugestoes() : '<p class="nota">Seu usuário não tem a sugestão de IA habilitada.</p>'}
     ${contInput}
@@ -321,6 +351,8 @@ function desenhar() {
   $("conteudo").innerHTML = html;
   const coment = $("conteudo").querySelector('[data-campo="comentario"]');
   if (coment) coment.value = s.avaliacao.comentario || "";
+  const cpfEl = $("conteudo").querySelector('[data-campo="cpf-manual"]');
+  if (cpfEl) cpfEl.value = s.cpfManualInput || "";
   for (const [nome, valor] of Object.entries(s.precos.form)) {
     const el = $("conteudo").querySelector(`[data-campo="preco-${nome}"]`);
     if (el?.type === "checkbox") el.checked = valor; else if (el) el.value = valor;
@@ -372,6 +404,8 @@ async function acao(evento) {
     if (s.precos.aberto && !s.precos.form.checkin) s.precos.form.checkin = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
     desenhar();
   } else if (tipo === "precos-buscar") { buscarPrecos(); }
+  else if (tipo === "cpf-carregar") { carregarCpfManual(); }
+  else if (tipo === "cpf-limpar") { limparCpfManual(); }
 }
 
 // ---------- ligações ----------
@@ -410,6 +444,7 @@ $("tela-ligado").addEventListener("input", (evento) => {
   const campo = evento.target.dataset.campo;
   if (campo === "comentario") s.avaliacao.comentario = evento.target.value;
   else if (campo === "continuo") { s.continuo = evento.target.checked; if (s.continuo) perguntarTela(); }
+  else if (campo === "cpf-manual") s.cpfManualInput = evento.target.value;
   else if (campo?.startsWith("preco-")) s.precos.form[campo.slice(6)] = evento.target.type === "checkbox" ? evento.target.checked : evento.target.value;
 });
 chrome.storage.onChanged.addListener((mudou) => { if (mudou.urlView) iniciar(); });
