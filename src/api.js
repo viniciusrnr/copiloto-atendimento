@@ -2,7 +2,10 @@
 // Só o token vai para o chrome.storage; a senha nunca é guardada.
 
 const PREFIXO = "/api/copiloto/extensao";
-const PADRAO_URL = "";  // o build de HMG semeia esta constante com a URL do painel (login automático, sem preencher)
+// URL do painel já semeada: a extensão funciona sem configurar nada nas Opções (login automático).
+// Hoje aponta para HMG, onde o backend do copiloto (/api/copiloto/extensao) está publicado.
+// Ao promover o copiloto para produção, trocar para https://painelassistente.rdcviagens.com.br
+const PADRAO_URL = "https://hmgpainelassistente.rdcviagens.com.br";
 
 export class SessaoExpirada extends Error {}
 

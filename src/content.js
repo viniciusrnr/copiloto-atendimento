@@ -225,7 +225,9 @@
   // como iframe fixo no canto direito; o botão "minimizar" da UI recolhe para uma bolha, tudo dentro da aba.
   function montarPainel() {
     if (window.top !== window) return;               // só no frame principal
-    if (!location.pathname.startsWith("/interact_multiagent")) return;  // só na tela do agente (não no portal/login)
+    // SÓ na tela do agente (agent.jsp). NUNCA no /interact_multiagent/login nem no portal:
+    // `/login` também começa com `/interact_multiagent`, por isso o filtro é pelo /agent.
+    if (!location.pathname.startsWith("/interact_multiagent/agent")) return;
     if (document.getElementById("copiloto-embed")) return;
     const root = document.createElement("div");
     root.id = "copiloto-embed";
