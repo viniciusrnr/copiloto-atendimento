@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Copiloto de Atendimento RDC",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Sugestões de resposta da IA para os seus chats do Interact. Você revisa e envia.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "sidePanel"],

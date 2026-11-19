@@ -300,7 +300,13 @@ function renderPrecos() {
   const p = s.precos;
   if (!p.aberto) return '<button class="link precos-abrir" data-acao="precos-abrir">💰 Datas mais baratas do hotel</button>';
   const r = p.resultado;
-  const linhas = r && r.cotacoes ? r.cotacoes.map((c) => `<li>${esc(c.checkin)} — ${c.disponivel ? esc(valorTexto(c)) : "não confirmado"}${c.checkin === r.mais_barata ? ' <span class="selo barata">mais barata</span>' : ""}</li>`).join("") : "";
+  const linhas = r && r.cotacoes ? r.cotacoes.map((c) => {
+    if (!c.disponivel) return `<li>${esc(c.checkin)} — não confirmado</li>`;
+    const melhor = c.checkin === r.mais_barata;
+    const oferta = `${c.hotel || r.hotel_nome || "Hotel"} — check-in ${c.checkin}: ${valorTexto(c)}`;  // o que vai pro chat
+    return `<li>${esc(c.checkin)} — ${esc(valorTexto(c))}${melhor ? ' <span class="selo barata">mais barata</span>' : ""}`
+      + ` <button class="link" data-acao="inserir-oferta" data-texto="${esc(oferta)}">Inserir</button></li>`;
+  }).join("") : "";
   return `<div class="precos"><div class="detalhe-topo"><h3>💰 Datas mais baratas</h3><button class="link" data-acao="precos-fechar">✕</button></div>
     <label class="campo-preco"><span>Hotel (nome ou ID)</span><input type="text" data-campo="preco-hotel" placeholder="ex.: Boreas ou 93933"></label>
     <label class="campo-preco"><span>Check-in</span><input type="date" data-campo="preco-checkin"></label>
@@ -314,10 +320,14 @@ function renderPrecos() {
 }
 
 function valorTexto(c) {
+  const reais = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  // diárias do plano cobrem a estadia: nada a pagar
+  if (!c.dinheiro && !c.pontos) return c.diarias ? `grátis · ${c.diarias} diária(s) do plano` : "R$ 0";
+  // faces alternativas da MESMA opção: pontos (menor desembolso) OU dinheiro — nunca somadas
   const partes = [];
-  if (c.dinheiro != null) partes.push(Number(c.dinheiro).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
-  if (c.pontos != null) partes.push(`${c.pontos} pts`);
-  return partes.join(" + ") || "disponível";
+  if (c.pontos) partes.push(`${Number(c.pontos).toLocaleString("pt-BR")} pts`);
+  if (c.dinheiro != null) partes.push(reais(c.dinheiro));
+  return partes.join(" ou ") || "disponível";
 }
 
 function renderConversa() {
@@ -399,6 +409,7 @@ async function acao(evento) {
   else if (tipo === "cardapio-fechar") { s.cardapio = null; desenhar(); }
   else if (tipo === "ficha-toggle") { s.fichaAberta = !s.fichaAberta; desenhar(); }
   else if (tipo === "copiar-texto") { if (await copiar(alvo.dataset.texto)) { registrar("copiou", { callId: s.callId, dados: {} }); avisar("✓ Copiado. Revise e envie no Interact."); } }
+  else if (tipo === "inserir-oferta") { if (await inserir(alvo.dataset.texto)) { registrar("inseriu", { callId: s.callId, dados: { tipo: "oferta_preco" } }); avisar("✓ Oferta inserida. Revise e envie no Interact."); } }
   else if (tipo === "precos-abrir" || tipo === "precos-fechar") {
     s.precos.aberto = tipo === "precos-abrir";
     if (s.precos.aberto && !s.precos.form.checkin) s.precos.form.checkin = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
